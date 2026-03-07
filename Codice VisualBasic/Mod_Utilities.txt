@@ -1,0 +1,570 @@
+'================================================================================'
+#If VBA7 Then
+    Public Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As LongPtr)
+#Else
+    Public Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+#End If
+'================================================================================'
+Option Explicit
+
+' --- COSTANTI E VARIABILI GLOBALI ---
+Public Const SLIDE_VS As Integer = 32
+Public Const SLIDE_BATTAGLIA As Integer = 33
+Public Const LIVELLO_MIN As Integer = 5
+Public Const LIVELLO_MAX As Integer = 100
+Public g_MossaSupremaAttiva As String
+Public g_ScambioGiocatoreID As Integer
+Public g_SlideRitornoPostEvoluzione As Long
+
+' --- FUNZIONI DI CALCOLO E LOGICA ---
+
+Public Function CalcolaHPMax(xlWorkbook As Object, ID_Base As Long, livello As Integer) As Long
+    Dim pkmnSheet As Object, crescitaSheet As Object
+    Dim hpBase As Long, hpPerLivello As Double, categoria As String
+    Dim lastRow As Long, i As Long, found As Boolean
+    
+    On Error Resume Next
+    Set pkmnSheet = xlWorkbook.Sheets("Pokemon_Base")
+    Set crescitaSheet = xlWorkbook.Sheets("Crescita_HP")
+    If pkmnSheet Is Nothing Or crescitaSheet Is Nothing Then CalcolaHPMax = 20: Exit Function
+    On Error GoTo 0
+    
+    found = False
+    lastRow = pkmnSheet.Cells(pkmnSheet.Rows.count, "A").End(-4162).Row
+    
+    For i = 2 To lastRow
+        If CLng(pkmnSheet.Cells(i, "A").value) = ID_Base Then
+            hpBase = pkmnSheet.Cells(i, "E").value
+            categoria = pkmnSheet.Cells(i, "C").value
+            found = True
+            Exit For
+        End If
+    Next i
+    
+    If Not found Then CalcolaHPMax = 20: Exit Function
+    
+    Dim foundRow As Range
+    Set foundRow = crescitaSheet.Columns("A").Find(what:=categoria, lookIn:=-4163, lookAt:=1)
+    If foundRow Is Nothing Then
+        hpPerLivello = 1.5
+    Else
+        hpPerLivello = CDbl(Replace(crescitaSheet.Cells(foundRow.Row, "B").text, ".", ","))
+    End If
+    
+    If livello <= 5 Then
+        CalcolaHPMax = hpBase
+    Else
+        CalcolaHPMax = hpBase + Int((livello - 5) * hpPerLivello)
+    End If
+End Function
+
+Public Function ControllaSquadraRimanente(xlWorkbook As Object, Optional GiocatoreID As Variant) As Boolean
+    Dim teamSheet As Object, targetID As Long, lastRow As Long, i As Long
+    
+    If IsMissing(GiocatoreID) Then
+        targetID = xlWorkbook.Sheets("Battaglia_Corrente").Cells(3, 2).value
+    Else
+        targetID = GiocatoreID
+    End If
+    
+    If targetID = 1 Then Set teamSheet = xlWorkbook.Sheets("Giocatore1_Squadra") Else Set teamSheet = xlWorkbook.Sheets("Giocatore2_Squadra")
+    
+    lastRow = teamSheet.Cells(teamSheet.Rows.count, "A").End(-4162).Row
+    For i = 2 To lastRow
+        If teamSheet.Cells(i, "F").value > 0 Then
+            ControllaSquadraRimanente = True
+            Exit Function
+        End If
+    Next i
+    ControllaSquadraRimanente = False
+End Function
+
+Public Function DeterminaPrimoTurno(livelloA As Integer, livelloB As Integer) As String
+    If livelloA > livelloB Then
+        DeterminaPrimoTurno = "A"
+    ElseIf livelloB > livelloA Then
+        DeterminaPrimoTurno = "B"
+    Else
+        Randomize
+        If Int((2 * Rnd) + 1) = 1 Then DeterminaPrimoTurno = "A" Else DeterminaPrimoTurno = "B"
+    End If
+End Function
+
+Public Function LanciaDadi(NumeroDadi As Integer) As Integer
+    Dim totale As Integer, i As Integer: totale = 0
+    If NumeroDadi <= 0 Then NumeroDadi = 1
+    For i = 1 To NumeroDadi: totale = totale + Int((6 * Rnd) + 1): Next i
+    LanciaDadi = totale
+End Function
+
+Public Function OttieniParametriMossaAlLivello(ByVal xlWorkbook As Object, ByVal mossaID As Long, ByVal livello As Integer, ByRef outNome As String, ByRef outTipo As String, ByRef outNumD6 As Integer, ByRef outIncremento As Long) As Boolean
+    Dim mosseSheet As Object, r As Object
+    Dim colDadi As Long, colInc As Long, lvl As Integer
+    Set mosseSheet = xlWorkbook.Sheets("Mosse")
+    If mossaID <= 0 Then Exit Function
+    
+    Set r = mosseSheet.Columns("A").Find(what:=mossaID, lookIn:=-4163, lookAt:=1)
+    If r Is Nothing Then Exit Function
+    
+    outNome = mosseSheet.Cells(r.Row, "B").value
+    outTipo = mosseSheet.Cells(r.Row, "C").value
+    If Trim(outTipo) = "" Then outTipo = "Normale"
+    
+    lvl = ClampLivello(livello)
+    colDadi = ColonnaDadiPerLivello(mosseSheet, lvl)
+    colInc = ColonnaIncrementoPerLivello(mosseSheet, lvl)
+    If colDadi = 0 Or colInc = 0 Then Exit Function
+    
+    outNumD6 = val(mosseSheet.Cells(r.Row, colDadi).value)
+    outIncremento = val(mosseSheet.Cells(r.Row, colInc).value)
+    If outNumD6 < 0 Then outNumD6 = 0
+    If outIncremento < 0 Then outIncremento = 0
+    
+    OttieniParametriMossaAlLivello = True
+End Function
+
+Public Function ScegliMossaIA(ByVal xlWorkbook As Object, ByVal idBaseAtt As Long, ByVal livelloAtt As Integer, ByVal idBaseDif As Long) As Integer
+    Const STAB As Double = 1.5
+    Const STATO_BASE_SCORE As Double = 40 ' Valore tattico di applicare uno stato a un nemico sano
+    
+    Dim pkmnBase As Object, mosseSheet As Object
+    Dim attTipo As String, difTipo As String, difStato As String
+    Dim hpAtt As Long, hpMaxAtt As Long
+    Dim rAtt As Object, mossaID As Long
+    Dim bestIdx As Integer, i As Integer
+    Dim bestScore As Double, score As Double
+    Dim nome As String, tipo As String, numD6 As Integer, incremento As Long, effetto As String
+    
+    ' --- SETUP ---
+    Set pkmnBase = xlWorkbook.Sheets("Pokemon_Base")
+    Set mosseSheet = xlWorkbook.Sheets("Mosse")
+    
+    attTipo = GetTipoFromIDBase(xlWorkbook, idBaseAtt)
+    hpAtt = xlWorkbook.Sheets("Battaglia_Corrente").Cells(8, 2).value
+    hpMaxAtt = CalcolaHPMax(xlWorkbook, idBaseAtt, livelloAtt)
+    
+    difTipo = GetTipoFromIDBase(xlWorkbook, idBaseDif)
+    difStato = xlWorkbook.Sheets("Battaglia_Corrente").Cells(13, 2).value
+    
+    bestScore = -999
+    bestIdx = 1
+
+    ' --- CICLO DI DECISIONE ---
+    For i = 1 To 3 ' Analizza le 3 mosse
+        ' Recupera l'ID della mossa
+        Set rAtt = pkmnBase.Columns("A").Find(what:=idBaseAtt, lookIn:=-4163, lookAt:=1)
+        If rAtt Is Nothing Then GoTo RandomChoice
+        Select Case i: Case 1: mossaID = rAtt.Offset(0, 5).value: Case 2: mossaID = rAtt.Offset(0, 6).value: Case 3: mossaID = rAtt.Offset(0, 7).value: End Select
+        
+        If mossaID > 0 Then
+            If OttieniParametriMossaAlLivello(xlWorkbook, mossaID, livelloAtt, nome, tipo, numD6, incremento) Then
+                ' Recupera l'effetto della mossa
+                Dim rigaMossa As Range: Set rigaMossa = mosseSheet.Columns("A").Find(what:=mossaID)
+                Dim colEffetto As Long: colEffetto = TrovaColonnaHeader(mosseSheet, "Effetto")
+                If colEffetto > 0 Then effetto = UCase$(mosseSheet.Cells(rigaMossa.Row, colEffetto).value) Else effetto = ""
+                
+                ' Calcola il punteggio base dal DANNO
+                Dim stabMult As Double: If tipo = attTipo Then stabMult = STAB Else stabMult = 1
+                score = ((numD6 * 3.5) + incremento) * stabMult
+                
+                ' --- MODIFICATORI DI PUNTEGGIO ---
+                
+                ' 1. Efficacia del tipo
+                score = score * TipoMultiplier(xlWorkbook, tipo, difTipo)
+                
+                ' 2. Logica di CURA
+                If effetto = "CURA" Then
+                    If hpAtt <= (hpMaxAtt * 0.2) Then
+                        score = 100 ' Priorità massima
+                    Else
+                        score = -1 ' Priorità bassissima se non serve
+                    End If
+                End If
+                
+                ' 3. Logica degli STATI
+                If effetto = "ADDORMENTATO" Or effetto = "CONFUSO" Or effetto = "AVVELENATO" Then
+                    If difStato <> "" Then ' Nemico già affetto da uno stato
+                        score = 1 ' Priorità quasi nulla
+                    Else
+                        ' AGGIUNGI il valore base dello stato al punteggio
+                        score = score + STATO_BASE_SCORE
+                    End If
+                End If
+                
+                ' Assegna come mossa migliore
+                If score > bestScore Then
+                    bestScore = score
+                    bestIdx = i
+                End If
+            End If
+        End If
+    Next i
+    
+    ScegliMossaIA = bestIdx
+    Exit Function
+
+RandomChoice:
+    ' Se qualcosa va storto, scegli una mossa a caso
+    ScegliMossaIA = Int((3 * Rnd) + 1)
+End Function
+
+' --- FUNZIONI DI SUPPORTO (HELPERS) ---
+
+Public Function ClampLivello(lv As Integer) As Integer
+    If lv < LIVELLO_MIN Then
+        ClampLivello = LIVELLO_MIN
+    ElseIf lv > LIVELLO_MAX Then
+        ClampLivello = LIVELLO_MAX
+    Else
+        ClampLivello = lv
+    End If
+End Function
+
+Public Sub CloseDatabaseWorkbook(ByVal xlApp As Object, ByVal xlWB As Object, Optional ByVal SaveChanges As Boolean = False)
+    On Error Resume Next
+    If Not xlWB Is Nothing Then
+        xlWB.Close SaveChanges
+        Set xlWB = Nothing
+    End If
+    If Not xlApp Is Nothing Then
+        xlApp.Quit
+        Set xlApp = Nothing
+    End If
+    On Error GoTo 0
+End Sub
+
+Public Function ColonnaDadiPerLivello(mosseSheet As Object, livello As Integer) As Long
+    Dim baseCol As Long, lvl As Integer
+    lvl = ClampLivello(livello)
+    baseCol = TrovaColonnaHeader(mosseSheet, "Dadi_lvl_5")
+    If baseCol = 0 Then
+        ColonnaDadiPerLivello = 0
+    Else
+        ColonnaDadiPerLivello = baseCol + (lvl - 5)
+    End If
+End Function
+
+Public Function ColonnaIncrementoPerLivello(mosseSheet As Object, livello As Integer) As Long
+    Dim baseCol As Long, lvl As Integer
+    lvl = ClampLivello(livello)
+    baseCol = TrovaColonnaHeader(mosseSheet, "Incremento_lvl_5")
+    If baseCol = 0 Then
+        ColonnaIncrementoPerLivello = 0
+    Else
+        ColonnaIncrementoPerLivello = baseCol + (lvl - 5)
+    End If
+End Function
+
+Public Function ControllaSeEvolve(xlWorkbook As Object) As Boolean
+    ' Questa funzione controlla solo se il Pokémon attivo ha un'evoluzione in attesa.
+    ' Non esegue l'evoluzione.
+    On Error Resume Next
+    Dim pkmnAttivoSheet As Object, pkmnAttivoRiga As Range
+    Dim idBase As Long, livello As Integer
+    
+    ' Identifica il Pokémon del giocatore
+    If xlWorkbook.Sheets("Battaglia_Corrente").Cells(3, 2).value = 1 Then Set pkmnAttivoSheet = xlWorkbook.Sheets("Giocatore1_Squadra") Else Set pkmnAttivoSheet = xlWorkbook.Sheets("Giocatore2_Squadra")
+    Set pkmnAttivoRiga = pkmnAttivoSheet.Columns("A").Find(what:=xlWorkbook.Sheets("Battaglia_Corrente").Cells(4, 2).value)
+    If pkmnAttivoRiga Is Nothing Then Exit Function
+    
+    ' Leggi i suoi dati
+    idBase = pkmnAttivoRiga.Offset(0, 1).value
+    livello = pkmnAttivoRiga.Offset(0, 3).value
+    
+    ' Controlla nel database se può evolversi a questo livello
+    Dim pkmnBaseSheet As Object: Set pkmnBaseSheet = xlWorkbook.Sheets("Pokemon_Base")
+    Dim rigaBase As Range: Set rigaBase = pkmnBaseSheet.Columns("A").Find(what:=idBase)
+    If rigaBase Is Nothing Then Exit Function
+    
+    Dim livelloEvo As Integer: livelloEvo = CInt(val(pkmnBaseSheet.Cells(rigaBase.Row, "I").value))
+    Dim idEvo As Long: idEvo = CLng(val(pkmnBaseSheet.Cells(rigaBase.Row, "J").value))
+    
+    If livelloEvo > 0 And livello >= livelloEvo And idEvo > 0 Then
+        ControllaSeEvolve = True
+    End If
+End Function
+
+Public Function CSVAppendUnique(ByVal csv As String, ByVal token As String) As String
+    If Len(Trim(token)) = 0 Then CSVAppendUnique = csv: Exit Function
+    If Len(csv) = 0 Then
+        CSVAppendUnique = token
+    Else
+        If CSVContains(csv, token) Then
+            CSVAppendUnique = csv
+        Else
+            CSVAppendUnique = csv & "," & token
+        End If
+    End If
+End Function
+
+Public Function CSVContains(ByVal csv As String, ByVal token As String) As Boolean
+    ' Versione robusta che gestisce correttamente i token in una stringa CSV.
+    If Len(Trim(csv)) = 0 Or Len(Trim(token)) = 0 Then Exit Function
+    
+    ' Aggiungi delimitatori all'inizio e alla fine per una ricerca sicura
+    ' Trasforma "1,3,5" in ",1,3,5,"
+    ' In questo modo, cercare ",1," troverà una corrispondenza esatta.
+    Dim safeCsv As String
+    safeCsv = "," & csv & ","
+    
+    Dim safeToken As String
+    safeToken = "," & token & ","
+    
+    If InStr(1, safeCsv, safeToken, vbTextCompare) > 0 Then
+        CSVContains = True
+    Else
+        CSVContains = False
+    End If
+End Function
+
+Public Function GestisciLevelUp(ByVal xlWorkbook As Object, ByVal teamSheet As Object, ByVal rigaPkmn As Long) As String
+    Dim expAttuale As Long, livelloAttuale As Integer, idBase As Long, nome As String
+    Dim hpAttuali As Long, hpMaxPre As Long ' Variabili per calcolo HP
+    Dim messaggioLevelUp As String
+    
+    ' Leggi i dati attuali del Pokémon
+    expAttuale = teamSheet.Cells(rigaPkmn, "G").value
+    livelloAttuale = teamSheet.Cells(rigaPkmn, "D").value
+    hpAttuali = teamSheet.Cells(rigaPkmn, "F").value
+    hpMaxPre = teamSheet.Cells(rigaPkmn, "E").value
+    
+    If expAttuale >= 1 Then
+        livelloAttuale = livelloAttuale + 1
+        expAttuale = expAttuale - 1
+        
+        teamSheet.Cells(rigaPkmn, "D").value = livelloAttuale ' Aggiorna Livello
+        teamSheet.Cells(rigaPkmn, "G").value = expAttuale   ' Aggiorna EXP
+        
+        idBase = teamSheet.Cells(rigaPkmn, "B").value
+        Dim nuovoHP_Max As Long
+        nuovoHP_Max = CalcolaHPMax(xlWorkbook, idBase, livelloAttuale)
+        
+        ' Calcola la differenza e aggiungila agli HP attuali
+        Dim differenzaHP As Long: differenzaHP = nuovoHP_Max - hpMaxPre
+        Dim nuoviHP_Attuali As Long: nuoviHP_Attuali = hpAttuali + differenzaHP
+        
+        ' Assicura che non superi il nuovo massimo (importante se il Pokémon era già quasi full)
+        If nuoviHP_Attuali > nuovoHP_Max Then nuoviHP_Attuali = nuovoHP_Max
+        
+        teamSheet.Cells(rigaPkmn, "E").value = nuovoHP_Max ' Nuovo HP_Max
+        teamSheet.Cells(rigaPkmn, "F").value = nuoviHP_Attuali ' NUOVI HP ATTUALI, NON CURATI
+        
+        nome = teamSheet.Cells(rigaPkmn, "C").value
+        messaggioLevelUp = nome & " è salito al livello " & livelloAttuale & "!"
+        
+        Dim pkmnBaseSheet As Object: Set pkmnBaseSheet = xlWorkbook.Sheets("Pokemon_Base")
+        Dim rigaBase As Range: Set rigaBase = pkmnBaseSheet.Columns("A").Find(what:=idBase)
+        
+        If Not rigaBase Is Nothing Then
+            Dim livelloEvo As Integer, idEvo As Long
+            livelloEvo = CInt(val(pkmnBaseSheet.Cells(rigaBase.Row, "I").value)) ' Colonna I = Livello_Evoluzione
+            idEvo = CLng(val(pkmnBaseSheet.Cells(rigaBase.Row, "J").value))      ' Colonna J = Evoluzione_ID
+            
+            If livelloEvo > 0 And livelloAttuale >= livelloEvo And idEvo > 0 Then
+                ' EVOLUZIONE PRONTA!
+                ' Salva i dati per la sequenza di evoluzione
+                xlWorkbook.Sheets("Battaglia_Corrente").Cells(19, 2).value = idBase ' ID Pre-Evo
+                xlWorkbook.Sheets("Battaglia_Corrente").Cells(20, 2).value = idEvo  ' ID Post-Evo
+                xlWorkbook.Sheets("Battaglia_Corrente").Cells(21, 2).value = teamSheet.Cells(rigaPkmn, "A").value ' ID_Istanza
+                xlWorkbook.Sheets("Battaglia_Corrente").Cells(22, 2).value = 1 ' IMPOSTA IL FLAG Evoluzione_In_Attesa
+            End If
+        End If
+    End If
+    
+    GestisciLevelUp = messaggioLevelUp
+End Function
+
+Public Function GetPokemonDetailsFromInstance(xlWorkbook As Object, istanza As Long, ByRef outIDBase As Long, ByRef outNome As String, ByRef outLivello As Integer)
+    Dim teamSheet As Object, rigaPkmn As Range, idGiocatore As Long
+    If istanza >= 2000 And istanza < 3000 Then
+        idGiocatore = 2
+    ElseIf istanza >= 1000 And istanza < 2000 Then
+        idGiocatore = 1
+    Else:
+        idGiocatore = 0
+    End If
+    If idGiocatore > 0 Then
+        If idGiocatore = 1 Then Set teamSheet = xlWorkbook.Sheets("Giocatore1_Squadra") Else Set teamSheet = xlWorkbook.Sheets("Giocatore2_Squadra")
+        Set rigaPkmn = teamSheet.Columns("A").Find(what:=istanza)
+        If Not rigaPkmn Is Nothing Then
+            outIDBase = teamSheet.Cells(rigaPkmn.Row, "B").value
+            outNome = teamSheet.Cells(rigaPkmn.Row, "C").value
+            outLivello = teamSheet.Cells(rigaPkmn.Row, "D").value
+        End If
+    Else
+        outIDBase = istanza
+        Set rigaPkmn = xlWorkbook.Sheets("Pokemon_Base").Columns("A").Find(what:=outIDBase)
+        outNome = xlWorkbook.Sheets("Pokemon_Base").Cells(rigaPkmn.Row, "B").value
+        outLivello = xlWorkbook.Sheets("Battaglia_Corrente").Cells(9, 2).value
+    End If
+End Function
+
+Public Function GetTipoFromIDBase(ByVal xlWorkbook As Object, ByVal idBase As Long) As String
+    Dim ws As Object, r As Object, t As String
+    Set ws = xlWorkbook.Sheets("Pokemon_Base")
+    Set r = ws.Columns("A").Find(what:=idBase, lookIn:=-4163, lookAt:=1)
+    If Not r Is Nothing Then t = Trim(ws.Cells(r.Row, "D").value)
+    If t = "" Then t = "Normale"
+    GetTipoFromIDBase = t
+End Function
+
+Public Function PesoCategoria(ByVal categoria As String) As Long
+    Select Case UCase$(Trim$(categoria))
+        Case "COMUNE":     PesoCategoria = 60
+        Case "MEDIO":      PesoCategoria = 30
+        Case "DIFFICILE":  PesoCategoria = 10
+        Case Else:         PesoCategoria = 1
+    End Select
+End Function
+
+Public Function ProssimoBox(direzione As Integer) As Integer
+    ' Restituisce il NUMERO del prossimo box (1, 2, o 3)
+    Dim currentIndex As Integer, currentBox As Integer
+    currentIndex = ActivePresentation.SlideShowWindow.View.Slide.slideIndex
+    
+    ' Converte l'indice della slide nel numero del box
+    currentBox = currentIndex - 33 ' Adatta il -33 se le tue slide cambiano
+    
+    Dim nextBox As Integer
+    nextBox = currentBox + direzione
+    
+    ' Logica ciclica
+    If nextBox > 3 Then nextBox = 1
+    If nextBox < 1 Then nextBox = 3
+    
+    ProssimoBox = nextBox
+End Function
+
+Public Function RoundIntHalfUp(ByVal v As Double) As Long
+    If v >= 0 Then
+        RoundIntHalfUp = Int(v + 0.5)
+    Else
+        RoundIntHalfUp = -Int(-v + 0.5)
+    End If
+End Function
+
+Public Function ScegliIndicePesato(possibiliIncontri As Object) As Long
+    Dim tot As Long, i As Long, r As Long, acc As Long
+    For i = 0 To possibiliIncontri.count - 1
+        tot = tot + PesoCategoria(CStr(possibiliIncontri(i)(1)))
+    Next i
+    If tot <= 0 Then
+        ScegliIndicePesato = 0
+        Exit Function
+    End If
+    Randomize
+    r = Int(tot * Rnd) + 1
+    acc = 0
+    For i = 0 To possibiliIncontri.count - 1
+        acc = acc + PesoCategoria(CStr(possibiliIncontri(i)(1)))
+        If r <= acc Then
+            ScegliIndicePesato = i
+            Exit Function
+        End If
+    Next i
+    ScegliIndicePesato = possibiliIncontri.count - 1
+End Function
+
+Public Function ScegliProssimoPokemonAllenatore(ByVal xlWorkbook As Object, ByVal AllenatoreID_NPC As Long, ByVal tipoBattaglia As String, ByVal ko_csv As String, ByRef outID_Base As Long, ByRef outLV As Integer, ByRef outIndice As Long) As Boolean
+    Dim i As Long
+    
+    If UCase$(tipoBattaglia) = "PVP" Then
+        ' In PvP, l'AllenatoreID_NPC è l'ID del giocatore che fa da avversario (es. 201 per il Rivale, che è controllato dal G2)
+        ' Dobbiamo comunque leggere la squadra dal foglio Allenatori
+        Dim npcSheet As Object, npcRow As Range
+        Set npcSheet = xlWorkbook.Sheets("Allenatori")
+        Set npcRow = npcSheet.Columns("A").Find(what:=AllenatoreID_NPC, lookIn:=-4163, lookAt:=1)
+        If npcRow Is Nothing Then Exit Function
+        
+        For i = 1 To 6 ' Controlla i 6 slot dell'allenatore
+            If Not CSVContains(ko_csv, CStr(i)) Then
+                Dim idCol As Long, lvCol As Long
+                idCol = 4 + (i * 2) - 1: lvCol = idCol + 1
+                If Not IsEmpty(npcSheet.Cells(npcRow.Row, idCol).value) And IsNumeric(npcSheet.Cells(npcRow.Row, idCol).value) Then
+                    If CLng(npcSheet.Cells(npcRow.Row, idCol).value) > 0 Then
+                        outID_Base = CLng(npcSheet.Cells(npcRow.Row, idCol).value)
+                        outLV = CInt(npcSheet.Cells(npcRow.Row, lvCol).value)
+                        outIndice = i
+                        ScegliProssimoPokemonAllenatore = True
+                        Exit Function
+                    End If
+                End If
+            End If
+        Next i
+        
+    Else ' Allenatore_NPC
+        ' La logica è identica per NPC e PvP, leggiamo sempre dal foglio Allenatori
+        Dim npcSheet_npc As Object, npcRow_npc As Range
+        Set npcSheet_npc = xlWorkbook.Sheets("Allenatori")
+        Set npcRow_npc = npcSheet_npc.Columns("A").Find(what:=AllenatoreID_NPC, lookIn:=-4163, lookAt:=1)
+        If npcRow_npc Is Nothing Then Exit Function
+        
+        For i = 1 To 6
+            If Not CSVContains(ko_csv, CStr(i)) Then
+                Dim idCol_npc As Long, lvCol_npc As Long
+                idCol_npc = 4 + (i * 2) - 1: lvCol_npc = idCol_npc + 1
+                If Not IsEmpty(npcSheet_npc.Cells(npcRow_npc.Row, idCol_npc).value) And IsNumeric(npcSheet_npc.Cells(npcRow_npc.Row, idCol_npc).value) Then
+                     If CLng(npcSheet_npc.Cells(npcRow_npc.Row, idCol_npc).value) > 0 Then
+                        outID_Base = CLng(npcSheet_npc.Cells(npcRow_npc.Row, idCol_npc).value)
+                        outLV = CInt(npcSheet_npc.Cells(npcRow_npc.Row, lvCol_npc).value)
+                        outIndice = i
+                        ScegliProssimoPokemonAllenatore = True
+                        Exit Function
+                    End If
+                End If
+            End If
+        Next i
+    End If
+
+    ScegliProssimoPokemonAllenatore = False
+End Function
+
+Public Function ScegliProssimoPokemonPvP_Random(ByVal xlWorkbook As Object, ByVal GiocatoreID As Long, ByVal usedInstCSV As String, ByRef outIst As Long, ByRef outHP As Long, ByRef outLV As Integer) As Boolean
+    Dim team As Object, lastRow As Long, r As Long
+    If GiocatoreID = 1 Then
+        Set team = xlWorkbook.Sheets("Giocatore1_Squadra")
+    Else
+        Set team = xlWorkbook.Sheets("Giocatore2_Squadra")
+    End If
+    lastRow = team.Cells(team.Rows.count, "A").End(-4162).Row
+    Dim candidates As Object: Set candidates = CreateObject("System.Collections.ArrayList")
+    For r = 2 To lastRow
+        Dim inst As Long: inst = CLng(team.Cells(r, "A").value)
+        Dim hp As Long: hp = CLng(team.Cells(r, "F").value)
+        Dim lv As Integer: lv = CInt(team.Cells(r, "D").value)
+        If Not CSVContains(usedInstCSV, CStr(inst)) Then
+            candidates.Add Array(inst, hp, lv)
+        End If
+    Next r
+    If candidates.count = 0 Then
+        ScegliProssimoPokemonPvP_Random = False
+        Exit Function
+    End If
+    Randomize
+    Dim pick As Variant
+    pick = candidates(Int(candidates.count * Rnd))
+    outIst = CLng(pick(0))
+    outHP = CLng(pick(1))
+    outLV = CInt(pick(2))
+    ScegliProssimoPokemonPvP_Random = True
+End Function
+
+Public Function TipoMultiplier(ByVal xlWorkbook As Object, ByVal tipoAttacco As String, ByVal tipoDifesa As String) As Double
+    Dim ws As Object, r As Object, c As Object, m As Double
+    Set ws = xlWorkbook.Sheets("Tipi")
+    Set r = ws.Columns("A").Find(what:=tipoAttacco, lookIn:=-4163, lookAt:=1)
+    Set c = ws.Rows(1).Find(what:=tipoDifesa, lookIn:=-4163, lookAt:=1)
+    If r Is Nothing Or c Is Nothing Then
+        m = 1
+    Else
+        m = val(ws.Cells(r.Row, c.Column).value)
+        If m = 0 Then m = 0
+    End If
+    TipoMultiplier = m
+End Function
+
+Public Function TrovaColonnaHeader(ws As Object, header As String) As Long
+    Dim c As Object
+    Set c = ws.Rows(1).Find(what:=header, lookIn:=-4163, lookAt:=1)
+    If Not c Is Nothing Then TrovaColonnaHeader = c.Column Else TrovaColonnaHeader = 0
+End Function

@@ -1,0 +1,519 @@
+Option Explicit
+
+' --- SETUP INIZIALE E SCELTA STARTER ---
+
+Public Sub ScegliPokemonPerGiocatore(ID_Base As Long, NomePokemon As String, Giocatore As Integer, Optional ByVal LivelloIniziale As Integer = 5, Optional ByVal xlWorkbook As Object = Nothing, Optional ByVal AlDeposito As Boolean = False)
+    Dim xlApp As Object, xlSheet As Object, percorsoFile As String, nextRow As Long, ID_Istanza As Long, hpMax As Long
+    Dim closeWorkbookOnExit As Boolean: closeWorkbookOnExit = False
+    
+    If xlWorkbook Is Nothing Then
+        percorsoFile = ActivePresentation.path & "\Database.xlsx"
+        If Dir(percorsoFile) = "" Then MsgBox "Errore: Database.xlsx non trovato!", vbCritical: Exit Sub
+        Set xlApp = CreateObject("Excel.Application"): Set xlWorkbook = xlApp.Workbooks.Open(percorsoFile)
+        closeWorkbookOnExit = True
+    End If
+    
+    Dim teamSheet As Object, depositoSheet As Object
+    If Giocatore = 1 Then
+        Set teamSheet = xlWorkbook.Sheets("Giocatore1_Squadra")
+        Set depositoSheet = xlWorkbook.Sheets("Giocatore1_Deposito")
+    Else
+        Set teamSheet = xlWorkbook.Sheets("Giocatore2_Squadra")
+        Set depositoSheet = xlWorkbook.Sheets("Giocatore2_Deposito")
+    End If
+    
+    If AlDeposito Then Set xlSheet = depositoSheet Else Set xlSheet = teamSheet
+    
+    Dim maxID_Squadra As Long, maxID_Deposito As Long, maxID_Totale As Long
+    On Error Resume Next
+    maxID_Squadra = xlWorkbook.Application.WorksheetFunction.max(teamSheet.Columns(1))
+    maxID_Deposito = xlWorkbook.Application.WorksheetFunction.max(depositoSheet.Columns(1))
+    On Error GoTo 0
+    
+    If maxID_Squadra > maxID_Deposito Then maxID_Totale = maxID_Squadra Else maxID_Totale = maxID_Deposito
+    
+    If maxID_Totale = 0 Then
+        If Giocatore = 1 Then ID_Istanza = 1001 Else ID_Istanza = 2001
+    Else
+        ID_Istanza = maxID_Totale + 1
+    End If
+    
+    hpMax = CalcolaHPMax(xlWorkbook, ID_Base, LivelloIniziale)
+    nextRow = xlSheet.Cells(xlSheet.Rows.count, "A").End(-4162).Row + 1
+    
+    With xlSheet
+        .Cells(nextRow, 1).value = ID_Istanza: .Cells(nextRow, 2).value = ID_Base: .Cells(nextRow, 3).value = NomePokemon
+        .Cells(nextRow, 4).value = LivelloIniziale: .Cells(nextRow, 5).value = hpMax: .Cells(nextRow, 6).value = hpMax
+    End With
+    
+    If closeWorkbookOnExit Then
+        CloseDatabaseWorkbook xlApp, xlWorkbook, True
+    End If
+End Sub
+
+Public Sub AssegnaRivaleEVaiAllaMappa(ID_Base As Long, NomePokemon As String)
+    Dim xlApp As Object, xlWorkbook As Object, npcSheet As Object, percorsoFile As String, rivalRow As Range
+    
+    percorsoFile = ActivePresentation.path & "\Database.xlsx"
+    If Dir(percorsoFile) = "" Then MsgBox "Errore: Database.xlsx non trovato!", vbCritical: Exit Sub
+    
+    Set xlApp = CreateObject("Excel.Application"): Set xlWorkbook = xlApp.Workbooks.Open(percorsoFile)
+    Set npcSheet = xlWorkbook.Sheets("Allenatori")
+    
+    Set rivalRow = npcSheet.Columns("B").Find(what:="Rivale", lookIn:=-4163, lookAt:=1)
+    
+    If Not rivalRow Is Nothing Then
+        npcSheet.Cells(rivalRow.Row, "E").value = ID_Base
+        npcSheet.Cells(rivalRow.Row, "F").value = 5
+    Else
+        MsgBox "Allenatore 'Rivale' non trovato nel file Excel!", vbExclamation
+    End If
+    
+    CloseDatabaseWorkbook xlApp, xlWorkbook, True
+End Sub
+
+' --- NAVIGAZIONE SU MAPPA ---
+
+Public Sub ImpostaTurnoAttivo(GiocatoreID As Integer)
+    Dim xlApp As Object, xlWorkbook As Object, statoSheet As Object, percorsoFile As String
+    Dim nomeGiocatoreAttivo As String
+    
+    percorsoFile = ActivePresentation.path & "\Database.xlsx"
+    If Dir(percorsoFile) = "" Then Exit Sub
+    
+    Set xlApp = CreateObject("Excel.Application")
+    Set xlWorkbook = xlApp.Workbooks.Open(percorsoFile)
+    Set statoSheet = xlWorkbook.Sheets("Stato_Giocatore")
+    
+    ' Imposta TUTTI i turni su 0 (False)
+    statoSheet.Range("D2:D3").value = 0
+    
+    ' Imposta su 1 (True) solo il giocatore selezionato
+    If GiocatoreID = 1 Then
+        statoSheet.Cells(2, "D").value = 1
+        nomeGiocatoreAttivo = statoSheet.Cells(2, "B").value
+    ElseIf GiocatoreID = 2 Then
+        statoSheet.Cells(3, "D").value = 1
+        nomeGiocatoreAttivo = statoSheet.Cells(3, "B").value
+    End If
+    
+    CloseDatabaseWorkbook xlApp, xlWorkbook, True
+
+End Sub
+
+Public Sub SpostaGiocatore(NuovaPosizione As String, ID_Diapositiva As Integer)
+    Dim xlApp As Object, xlWorkbook As Object, statoSheet As Object, percorsoFile As String, activePlayerRow As Long
+    percorsoFile = ActivePresentation.path & "\Database.xlsx"
+    If Dir(percorsoFile) = "" Then MsgBox "Errore: Database.xlsx non trovato!", vbCritical: Exit Sub
+    Set xlApp = CreateObject("Excel.Application"): Set xlWorkbook = xlApp.Workbooks.Open(percorsoFile)
+    Set statoSheet = xlWorkbook.Sheets("Stato_Giocatore")
+    
+    ' CERCA IL VALORE 1 INVECE DI TRUE
+    activePlayerRow = statoSheet.Columns("D").Find(what:=1, lookIn:=-4163, lookAt:=1).Row
+    
+    If activePlayerRow <> 0 Then statoSheet.Cells(activePlayerRow, "C").value = NuovaPosizione
+    CloseDatabaseWorkbook xlApp, xlWorkbook, True
+    ActivePresentation.SlideShowWindow.View.GotoSlide ID_Diapositiva
+End Sub
+
+' --- INIZIO BATTAGLIE ---
+
+Public Sub IniziaBattagliaSelvatica(Luogo As String, Cespuglio As String)
+    Dim xlApp As Object, xlWorkbook As Object
+    Dim incontriSheet As Object, battagliaSheet As Object, statoSheet As Object, pkmnBaseSheet As Object
+    Dim playerTeamSheet As Object
+    Dim percorsoFile As String, possibiliIncontri As Object, lastRow As Long
+    Dim wildPokemonID As Long, wildPokemonName As String, wildPokemonLevel As Integer, wildPokemonHP As Long
+    Dim activePlayerID As Long, activePlayerRow As Long
+    Dim playerPokemonInstanceID As Long, playerPokemonCurrentHP As Long, playerPokemonLevel As Integer
+    Dim primoTurno As String
+    Dim i As Long
+    
+    percorsoFile = ActivePresentation.path & "\Database.xlsx"
+    If Dir(percorsoFile) = "" Then
+        Mod_UI_Manager.MostraInfoBox ActivePresentation.SlideShowWindow.View.Slide, "Errore: Database.xlsx non trovato!", True, "A", "Errore"
+        Exit Sub
+    End If
+    
+    Set xlApp = CreateObject("Excel.Application")
+    Set xlWorkbook = xlApp.Workbooks.Open(percorsoFile)
+    
+    Set incontriSheet = xlWorkbook.Sheets("Incontri_Selvatici")
+    Set battagliaSheet = xlWorkbook.Sheets("Battaglia_Corrente")
+    Set statoSheet = xlWorkbook.Sheets("Stato_Giocatore")
+    Set pkmnBaseSheet = xlWorkbook.Sheets("Pokemon_Base")
+    
+    Set possibiliIncontri = CreateObject("System.Collections.ArrayList")
+    lastRow = incontriSheet.Cells(incontriSheet.Rows.count, "A").End(-4162).Row
+    For i = 2 To lastRow
+        If incontriSheet.Cells(i, "A").value = Luogo And incontriSheet.Cells(i, "B").value = Cespuglio Then
+            possibiliIncontri.Add Array(incontriSheet.Cells(i, "C").value, incontriSheet.Cells(i, "D").value, incontriSheet.Cells(i, "E").value, incontriSheet.Cells(i, "F").value)
+        End If
+    Next i
+    
+    If possibiliIncontri.count = 0 Then
+        CloseDatabaseWorkbook xlApp, xlWorkbook, False
+        MostraInfoSuSlideCorrente "Nessun Pokémon selvatico qui..."
+        Exit Sub
+    End If
+    
+    Dim idx As Long, chosenEncounter As Variant
+    idx = ScegliIndicePesato(possibiliIncontri)
+    chosenEncounter = possibiliIncontri(idx)
+    
+    wildPokemonID = CLng(chosenEncounter(0))
+    Randomize
+    wildPokemonLevel = Int((CLng(chosenEncounter(3)) - CLng(chosenEncounter(2)) + 1) * Rnd + CLng(chosenEncounter(2)))
+    
+    Dim rigaBase As Object
+    Set rigaBase = pkmnBaseSheet.Columns("A").Find(what:=wildPokemonID, lookIn:=-4163, lookAt:=1)
+    If rigaBase Is Nothing Then
+        wildPokemonName = "Sconosciuto"
+    Else
+        wildPokemonName = pkmnBaseSheet.Cells(rigaBase.Row, "B").value
+    End If
+    
+    wildPokemonHP = CalcolaHPMax(xlWorkbook, wildPokemonID, wildPokemonLevel)
+    
+    activePlayerRow = statoSheet.Columns("D").Find(what:=1, lookIn:=-4163, lookAt:=1).Row
+    activePlayerID = statoSheet.Cells(activePlayerRow, "A").value
+    
+    If activePlayerID = 1 Then
+        Set playerTeamSheet = xlWorkbook.Sheets("Giocatore1_Squadra")
+    Else
+        Set playerTeamSheet = xlWorkbook.Sheets("Giocatore2_Squadra")
+    End If
+    
+    playerPokemonInstanceID = playerTeamSheet.Cells(2, "A").value
+    playerPokemonCurrentHP = playerTeamSheet.Cells(2, "F").value
+    playerPokemonLevel = playerTeamSheet.Cells(2, "D").value
+    
+    primoTurno = DeterminaPrimoTurno(playerPokemonLevel, wildPokemonLevel)
+    
+    With battagliaSheet
+        .Range("B2:B18").ClearContents
+        .Cells(2, 2).value = "Selvatico"
+        .Cells(3, 2).value = activePlayerID
+        .Cells(4, 2).value = playerPokemonInstanceID
+        .Cells(5, 2).value = playerPokemonCurrentHP
+        .Cells(6, 2).value = 0
+        .Cells(7, 2).value = wildPokemonID
+        .Cells(8, 2).value = wildPokemonHP
+        .Cells(9, 2).value = wildPokemonLevel
+        .Cells(10, 2).value = wildPokemonName
+        .Cells(11, 2).value = Luogo
+        .Cells(12, 2).value = primoTurno
+    End With
+    
+    CloseDatabaseWorkbook xlApp, xlWorkbook, True
+    Call Mod_UI_Manager.ResettaStatoPulsantiBattaglia
+    
+    ' Prepara la slide di battaglia PRIMA di andarci
+    Call Mod_UI_Manager.AggiornaInterfacciaBattaglia_DaTrigger_SullaSlideSpecifica(SLIDE_BATTAGLIA)
+    
+    ' Ora vai alla slide VS, che poi andrà da sola alla slide di battaglia
+    ActivePresentation.SlideShowWindow.View.GotoSlide SLIDE_VS
+End Sub
+
+Public Sub IniziaBattagliaAllenatore(ID_Allenatore_Avversario As Long, Nome_Allenatore As String, luogoRitorno As String)
+    Dim xlApp As Object, xlWorkbook As Object, statoSheet As Object, battagliaSheet As Object
+    Dim g1TeamSheet As Object, g2TeamSheet As Object, npcSheet As Object, pkmnBaseSheet As Object
+    Dim percorsoFile As String, tipoBattaglia As String
+    Dim activePlayerID As Integer, activePlayerRow As Long, activePlayerInstanceID As Long, activePlayerCurrentHP As Long, activePlayerLevel As Integer
+    Dim opponentPlayerID As Long, opponentPokemonID As Long, opponentCurrentHP As Long, opponentLevel As Integer
+    Dim primoTurno As String, npcRow As Range
+    
+    percorsoFile = ActivePresentation.path & "\Database.xlsx"
+    If Dir(percorsoFile) = "" Then MostraInfoSuSlideCorrente "Errore: Database.xlsx non trovato!": Exit Sub
+    
+    Set xlApp = CreateObject("Excel.Application"): Set xlWorkbook = xlApp.Workbooks.Open(percorsoFile)
+
+    Set statoSheet = xlWorkbook.Sheets("Stato_Giocatore")
+    Set battagliaSheet = xlWorkbook.Sheets("Battaglia_Corrente")
+    Set g1TeamSheet = xlWorkbook.Sheets("Giocatore1_Squadra")
+    Set g2TeamSheet = xlWorkbook.Sheets("Giocatore2_Squadra")
+    Set npcSheet = xlWorkbook.Sheets("Allenatori")
+    Set pkmnBaseSheet = xlWorkbook.Sheets("Pokemon_Base")
+
+    activePlayerRow = statoSheet.Columns("D").Find(what:=1, lookIn:=-4163, lookAt:=1).Row
+    activePlayerID = statoSheet.Cells(activePlayerRow, "A").value
+    
+    If activePlayerID = 1 Then
+        activePlayerInstanceID = g1TeamSheet.Cells(2, "A").value
+        activePlayerCurrentHP = g1TeamSheet.Cells(2, "F").value
+        activePlayerLevel = g1TeamSheet.Cells(2, "D").value
+    Else
+        activePlayerInstanceID = g2TeamSheet.Cells(2, "A").value
+        activePlayerCurrentHP = g2TeamSheet.Cells(2, "F").value
+        activePlayerLevel = g2TeamSheet.Cells(2, "D").value
+    End If
+
+    Set npcRow = npcSheet.Columns("A").Find(what:=ID_Allenatore_Avversario, lookIn:=-4163, lookAt:=1)
+    If npcRow Is Nothing Then
+        xlWorkbook.Close False: xlApp.Quit: MostraInfoSuSlideCorrente "Allenatore non trovato (ID " & ID_Allenatore_Avversario & ")": Exit Sub
+    End If
+    
+    tipoBattaglia = npcSheet.Cells(npcRow.Row, "D").value
+    opponentPlayerID = ID_Allenatore_Avversario
+
+    opponentPokemonID = npcSheet.Cells(npcRow.Row, "E").value
+    opponentLevel = npcSheet.Cells(npcRow.Row, "F").value
+    opponentCurrentHP = Mod_Utilities.CalcolaHPMax(xlWorkbook, opponentPokemonID, opponentLevel)
+
+    primoTurno = Mod_Utilities.DeterminaPrimoTurno(activePlayerLevel, opponentLevel)
+    
+    With battagliaSheet
+        .Range("B2:B18").ClearContents
+        .Cells(2, 2).value = tipoBattaglia
+        .Cells(3, 2).value = activePlayerID
+        .Cells(4, 2).value = activePlayerInstanceID
+        .Cells(5, 2).value = activePlayerCurrentHP
+        .Cells(6, 2).value = opponentPlayerID
+        .Cells(7, 2).value = opponentPokemonID
+        .Cells(8, 2).value = opponentCurrentHP
+        .Cells(9, 2).value = opponentLevel
+        .Cells(10, 2).value = Nome_Allenatore
+        .Cells(11, 2).value = luogoRitorno
+        .Cells(12, 2).value = primoTurno
+        .Cells(17, 2).value = 1 ' Il primo Pokémon in campo ha sempre indice 1
+        .Cells(18, 2).value = "" ' Assicura che la lista KO parta VUOTA
+    End With
+    
+    CloseDatabaseWorkbook xlApp, xlWorkbook, True
+    Call Mod_UI_Manager.ResettaStatoPulsantiBattaglia
+    
+    ' Prepara la slide di battaglia PRIMA di andarci
+    Call Mod_UI_Manager.AggiornaInterfacciaBattaglia_DaTrigger_SullaSlideSpecifica(SLIDE_BATTAGLIA)
+    
+    ' Ora vai alla slide VS, che poi andrà da sola alla slide di battaglia
+    ActivePresentation.SlideShowWindow.View.GotoSlide SLIDE_VS
+End Sub
+
+Public Sub AvviaAnimazioneEvoluzione()
+    Dim sld As Slide: Set sld = ActivePresentation.Slides(37)
+    
+    ' Nascondi l'InfoBox per far partire l'animazione
+    sld.Shapes("Evo_InfoBox").Visible = msoFalse
+
+End Sub
+
+Public Sub AvviaScenaEvoluzione()
+    Dim xlApp As Object, xlWorkbook As Object, percorsoFile As String
+    Dim nomePre As String, idPre As Long
+    
+    percorsoFile = ActivePresentation.path & "\Database.xlsx"
+    Set xlApp = CreateObject("Excel.Application")
+    Set xlWorkbook = xlApp.Workbooks.Open(percorsoFile) ' Apri in modalità lettura/scrittura
+    
+    ' Leggi i dati necessari per la scena
+    idPre = xlWorkbook.Sheets("Battaglia_Corrente").Cells(19, 2).value
+    nomePre = xlWorkbook.Sheets("Pokemon_Base").Columns("A").Find(what:=idPre).Offset(0, 1).value
+
+    xlWorkbook.Sheets("Battaglia_Corrente").Cells(22, 2).value = 0 ' Resetta Evoluzione_In_Attesa
+    
+    CloseDatabaseWorkbook xlApp, xlWorkbook, True ' Salva la modifica al flag
+    
+    g_SlideRitornoPostEvoluzione = SLIDE_BATTAGLIA
+    
+    ' Vai alla slide e prepara la scena
+    ActivePresentation.SlideShowWindow.View.GotoSlide 37
+    Call PreparaScenaEvoluzione("Cosa? " & nomePre & " si sta evolvendo!")
+End Sub
+
+Public Sub ConcludiEvoluzione()
+    Dim sld As Slide: Set sld = ActivePresentation.Slides(37)
+    Dim xlApp As Object, xlWorkbook As Object, percorsoFile As String
+    Dim idPre As Long, idPost As Long, idIstanza As Long, teamSheet As Object, rigaPkmn As Range
+    Dim nomeVecchio As String, nomeNuovo As String, nuovoLivello As Integer
+    
+    percorsoFile = ActivePresentation.path & "\Database.xlsx"
+    Set xlApp = CreateObject("Excel.Application")
+    Set xlWorkbook = xlApp.Workbooks.Open(percorsoFile)
+    
+    ' Leggi i dati necessari
+    Dim battagliaSheet As Object: Set battagliaSheet = xlWorkbook.Sheets("Battaglia_Corrente")
+    idPre = battagliaSheet.Cells(19, 2).value
+    idPost = battagliaSheet.Cells(20, 2).value
+    idIstanza = battagliaSheet.Cells(21, 2).value
+    
+    Dim activePlayerID As Long
+    activePlayerID = xlWorkbook.Sheets("Stato_Giocatore").Columns("D").Find(what:=1).Row - 1
+    If activePlayerID = 1 Then Set teamSheet = xlWorkbook.Sheets("Giocatore1_Squadra") Else Set teamSheet = xlWorkbook.Sheets("Giocatore2_Squadra")
+    
+    ' Trova il Pokémon e aggiorna i suoi dati
+    Set rigaPkmn = teamSheet.Columns("A").Find(what:=idIstanza)
+    If Not rigaPkmn Is Nothing Then
+        ' Leggi i dati prima della modifica
+        Dim hpAttualiPre As Long: hpAttualiPre = teamSheet.Cells(rigaPkmn.Row, "F").value
+        Dim hpMaxPre As Long: hpMaxPre = teamSheet.Cells(rigaPkmn.Row, "E").value
+        nuovoLivello = teamSheet.Cells(rigaPkmn.Row, "D").value
+        
+        ' Aggiorna l'ID_Base con quello dell'evoluzione
+        teamSheet.Cells(rigaPkmn.Row, "B").value = idPost
+        
+        ' Aggiorna il nome
+        nomeVecchio = xlWorkbook.Sheets("Pokemon_Base").Columns("A").Find(what:=idPre).Offset(0, 1).value
+        nomeNuovo = xlWorkbook.Sheets("Pokemon_Base").Columns("A").Find(what:=idPost).Offset(0, 1).value
+        If UCase$(teamSheet.Cells(rigaPkmn.Row, "C").value) = UCase$(nomeVecchio) Then
+            teamSheet.Cells(rigaPkmn.Row, "C").value = nomeNuovo
+        End If
+        
+        ' Calcola i nuovi HP massimi
+        Dim nuovoHP_Max As Long
+        nuovoHP_Max = Mod_Utilities.CalcolaHPMax(xlWorkbook, idPost, nuovoLivello)
+        
+        ' Calcola la differenza
+        Dim differenzaHP As Long
+        differenzaHP = nuovoHP_Max - hpMaxPre
+        
+        ' Aggiungi la differenza agli HP attuali
+        Dim nuoviHP_Attuali As Long
+        nuoviHP_Attuali = hpAttualiPre + differenzaHP
+        
+        ' Assicurati che gli HP attuali non superino i nuovi massimi
+        If nuoviHP_Attuali > nuovoHP_Max Then nuoviHP_Attuali = nuovoHP_Max
+        
+        ' Salva i nuovi valori
+        teamSheet.Cells(rigaPkmn.Row, "E").value = nuovoHP_Max     ' Nuovo HP_Max
+        teamSheet.Cells(rigaPkmn.Row, "F").value = nuoviHP_Attuali  ' Nuovo HP_Attuali
+        
+        ' AGGIORNAMENTO IMPORTANTE: Aggiorna anche l'ID_Base nel foglio Battaglia_Corrente
+        battagliaSheet.Cells(4, 2).value = idIstanza ' ID Istanza rimane lo stesso
+        battagliaSheet.Cells(5, 2).value = nuovoHP_Max ' HP vengono curati al massimo
+    End If
+    
+    
+    With xlWorkbook.Sheets("Battaglia_Corrente")
+        .Cells(19, 2).value = 0 ' Resetta ID Pre-Evo
+        .Cells(20, 2).value = 0 ' Resetta ID Post-Evo
+        .Cells(21, 2).value = 0 ' Resetta ID_Istanza
+        .Cells(22, 2).value = 0 ' Resetta il flag
+    End With
+    
+    CloseDatabaseWorkbook xlApp, xlWorkbook, True ' Salva tutte le modifiche
+    
+    ' Mostra il messaggio finale e il pulsante per continuare
+    sld.Shapes("Evo_InfoBox").TextFrame.TextRange.text = nomeVecchio & " si è evoluto!"
+    sld.Shapes("Evo_InfoBox").Visible = msoTrue
+    sld.Shapes("Evo_Pulsante_Continua").Visible = msoTrue
+    
+    ' Disattiva il clic sull'InfoBox per avviare l'animazione
+    With sld.Shapes("Evo_InfoBox").ActionSettings(ppMouseClick)
+        .Action = ppActionNone ' Imposta l'azione su "Nessuna azione"
+        .Run = ""
+    End With
+    
+    ' Disattiva il clic sullo sprite post-evoluzione per concludere
+    With sld.Shapes("Evo_Sprite_Post").GroupItems("Sprite_B_" & idPost).ActionSettings(ppMouseClick)
+        .Action = ppActionNone ' Imposta l'azione su "Nessuna azione"
+        .Run = ""
+    End With
+    
+End Sub
+
+Public Sub ControllaEseguiEvoluzionePostBattaglia()
+    Dim xlApp As Object, xlWorkbook As Object, percorsoFile As String
+    Dim idPre As Long, nomePre As String, nomePost As String
+    
+    percorsoFile = ActivePresentation.path & "\Database.xlsx"
+    Set xlApp = CreateObject("Excel.Application")
+    Set xlWorkbook = xlApp.Workbooks.Open(percorsoFile, True) ' Sola lettura
+    
+    ' Controlla se c'è un'evoluzione in attesa
+    idPre = xlWorkbook.Sheets("Battaglia_Corrente").Cells(19, 2).value
+    
+    If idPre > 0 Then
+        ' C'È UN'EVOLUZIONE!
+        nomePre = xlWorkbook.Sheets("Pokemon_Base").Columns("A").Find(what:=idPre).Offset(0, 1).value
+        CloseDatabaseWorkbook xlApp, xlWorkbook, False
+        
+        ' Memorizza la slide di ritorno (quella della mappa, non della battaglia)
+        g_SlideRitornoPostEvoluzione = Mod_UI_Manager.GetSlideIDPostBattaglia()
+        
+        ' Vai alla slide di evoluzione e prepara la scena
+        ActivePresentation.SlideShowWindow.View.GotoSlide 37
+        Call PreparaScenaEvoluzione("Cosa? " & nomePre & " si sta evolvendo!")
+    Else
+        ' NESSUNA EVOLUZIONE: torna alla mappa
+        CloseDatabaseWorkbook xlApp, xlWorkbook, False
+        Call Mod_UI_Manager.TornaAllaMappa
+    End If
+End Sub
+
+Public Sub NavigaEApriDeposito(BoxNumero As Integer)
+    Dim slideIndex As Integer, sld As Slide
+    
+    Select Case BoxNumero
+        Case 1: slideIndex = 34
+        Case 2: slideIndex = 35
+        Case 3: slideIndex = 36
+        Case Else: Exit Sub
+    End Select
+    
+    ' 1. "Pulisci" la slide di destinazione PRIMA di andarci
+    Set sld = ActivePresentation.Slides(slideIndex)
+    Call Mod_Deposito.PulisciUI_Deposito(sld)
+    
+    ' 2. Vai alla slide (ora è vuota)
+    ActivePresentation.SlideShowWindow.View.GotoSlide slideIndex
+    
+    Sleep 50: DoEvents
+    
+    ' 3. Chiama la macro per popolarla
+    Call Mod_Deposito.ApriInterfacciaDeposito(BoxNumero)
+End Sub
+
+Public Sub PreparaScenaEvoluzione(messaggioIniziale As String)
+    Dim sld As Slide: Set sld = ActivePresentation.Slides(37)
+    Dim xlApp As Object, xlWorkbook As Object, percorsoFile As String
+    Dim idPre As Long, idPost As Long
+    
+    percorsoFile = ActivePresentation.path & "\Database.xlsx"
+    Set xlApp = CreateObject("Excel.Application")
+    Set xlWorkbook = xlApp.Workbooks.Open(percorsoFile, True)
+    idPre = xlWorkbook.Sheets("Battaglia_Corrente").Cells(19, 2).value
+    idPost = xlWorkbook.Sheets("Battaglia_Corrente").Cells(20, 2).value
+    CloseDatabaseWorkbook xlApp, xlWorkbook, False
+    
+    On Error Resume Next
+    
+    ' Pulisci la scena precedente (nascondi tutto)
+    Dim shp As Shape
+    For Each shp In sld.Shapes("Evo_Sprite_Pre").GroupItems: shp.Visible = msoFalse: Next shp
+    For Each shp In sld.Shapes("Evo_Sprite_Post").GroupItems: shp.Visible = msoFalse: Next shp
+    sld.Shapes("Evo_Pulsante_Continua").Visible = msoFalse
+    
+    ' Mostra solo gli elementi iniziali
+    sld.Shapes("Evo_Sprite_Pre").GroupItems("Sprite_A_" & idPre).Visible = msoTrue
+    sld.Shapes("Evo_Sprite_Post").GroupItems("Sprite_B_" & idPost).Visible = msoTrue
+    sld.Shapes("Evo_InfoBox").TextFrame.TextRange.text = messaggioIniziale
+    sld.Shapes("Evo_InfoBox").Visible = msoTrue
+    
+    ' (Ri)attiva il clic sull'InfoBox per avviare l'animazione
+    With sld.Shapes("Evo_InfoBox").ActionSettings(ppMouseClick)
+        .Action = ppActionRunMacro
+        .Run = "Mod_Game_Events.AvviaAnimazioneEvoluzione"
+    End With
+    
+    ' (Ri)attiva il clic sullo sprite post-evoluzione per concludere
+    With sld.Shapes("Evo_Sprite_Post").GroupItems("Sprite_B_" & idPost).ActionSettings(ppMouseClick)
+        .Action = ppActionRunMacro
+        .Run = "Mod_Game_Events.ConcludiEvoluzione"
+    End With
+    
+    On Error GoTo 0
+End Sub
+
+Public Sub RitornaAllaBattaglia()
+    ' Prima vai alla slide di battaglia memorizzata
+    ActivePresentation.SlideShowWindow.View.GotoSlide g_SlideRitornoPostEvoluzione
+    
+    ' Poi, FORZA un ricaricamento completo dell'interfaccia.
+    ' DoEvents dà a PowerPoint il tempo di completare la transizione della slide
+    DoEvents
+    Sleep 50 ' Piccola pausa di sicurezza
+    
+    ' Questa chiamata ora leggerà i dati AGGIORNATI (con il nuovo ID_Base)
+    ' e mostrerà lo sprite e le mosse corrette.
+    Call Mod_UI_Manager.AggiornaInterfacciaBattaglia_DaTrigger
+End Sub
