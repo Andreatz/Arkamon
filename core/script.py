@@ -9,6 +9,8 @@ from world_scene import WorldScene
 from save_manager import load_pokemon_instances, load_player_state
 from paths import DATA_DIR, SLOT_1_DIR
 from route_scene import RouteScene
+from battle_scene import BattleScene
+from route_scene import RouteScene
 
 
 SCREEN_WIDTH = 1280
@@ -69,6 +71,14 @@ class Game:
             route_node_id = kwargs["route_node_id"]
             self.scenes["route"] = RouteScene(self, route_node_id)
             self.current_scene = self.scenes["route"]
+        elif scene_name == "battle":
+            self.scenes["battle"] = BattleScene(self)
+            self.current_scene = self.scenes["battle"]
+        elif scene_name == "route":
+            route_node_id = kwargs["route_node_id"]
+            self.scenes["route"] = RouteScene(self, route_node_id)
+            self.current_scene = self.scenes["route"]
+
 
     def start_or_continue_game(self) -> None:
         if self._should_start_in_lab():

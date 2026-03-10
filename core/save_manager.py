@@ -7,7 +7,7 @@ from typing import Dict, List
 from paths import SLOT_1_DIR
 
 LOCAL_MAP_STATE_FILE = "local_map_state.json"
-
+BATTLE_STATE_FILE = "battle_state.json"
 
 PLAYER_STATE_HEADER = [
     "player_id",
@@ -165,3 +165,25 @@ def get_player_route_state(state: dict, player_id: int, route_id: str) -> dict:
         "cleared_bushes": [],
         "defeated_npcs": []
     })
+
+
+def load_battle_state(save_dir: str | Path = SLOT_1_DIR) -> dict:
+    save_path = ensure_save_dir(save_dir)
+    file_path = save_path / BATTLE_STATE_FILE
+
+    if not file_path.exists():
+        return {}
+
+    with file_path.open("r", encoding="utf-8") as f:
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return {}
+
+
+def save_battle_state(state: dict, save_dir: str | Path = SLOT_1_DIR) -> None:
+    save_path = ensure_save_dir(save_dir)
+    file_path = save_path / BATTLE_STATE_FILE
+
+    with file_path.open("w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2, ensure_ascii=False)

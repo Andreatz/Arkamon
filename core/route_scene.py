@@ -12,6 +12,13 @@ from save_manager import (
     load_local_map_state,
     save_local_map_state,
     get_player_route_state,
+    load_pokemon_instances,
+    save_battle_state,
+)
+from encounter_service import (
+    roll_wild_encounter,
+    get_active_party_pokemon,
+    build_wild_battle_state,
 )
 
 
@@ -112,7 +119,44 @@ class RouteScene:
 
         for bush in self.bushes:
             if player_rect.colliderect(bush.rect):
-                self.message = f"Cespuglio {bush.bush_id}. Premi E per esplorare."
+                cleared = self.player_route_state["cleared_bushes"]
+                if bush.bush_id in cleared:
+                    self.message = f"{bush.bush_id} già visitato da questo giocatore."
+                    return
+
+                player_active = get_active_party_pokemon(self.instances, self.current_player_id)
+                if not player_active:
+                    self.message = "Nessun Pokémon disponibile in squadra."
+                    return
+
+                encounter = roll_wild_encounter(self.game.data, self.route_node_id, bush.bush_id)
+                if not encounter:
+                    self.message = "Nessun incontro configurato per questo cespuglio."
+                    return
+
+                species = self.game.data.species.get(encounter["species_id"])
+                if not species:
+                    self.message = "Specie selvaggia non valida nel database."
+                    return
+
+                hp_gain = self.game.data.hp_growth.get(species.hp_growth_id, 1)
+                wild_hp = int(species.base_hp + (encounter["level"] - 1) * hp_gain)
+
+                battle_state = build_wild_battle_state(
+                    route_node_id=self.route_node_id,
+                    bush_id=bush.bush_id,
+                    player_id=self.current_player_id,
+                    player_name=self.current_player["name"],
+                    player_active=player_active,
+                    encounter_entry=encounter,
+                    species_name=species.name,
+                    hp_max=wild_hp,
+                )
+
+                cleared.append(bush.bush_id)
+                save_local_map_state(self.local_state, SLOT_1_DIR)
+                save_battle_state(battle_state, SLOT_1_DIR)
+                self.game.change_scene("battle")
                 return
 
         for npc in self.npcs:
