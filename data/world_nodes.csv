@@ -1,33 +1,19 @@
-﻿node_id;name;node_type;local_map_file;world_x;world_y;has_center;has_gym;encounter_group;notes
-start_lab;Laboratorio;lab;lab_01.json;120;80;0;0;;Scelta starter
-venezia;Venezia;city;city_venezia.json;180;100;1;1;;Città iniziale
-route_1;Percorso_1;route;route_01.json;240;100;0;0;route_1_bushes;Primo percorso
-forest_1;Bosco_1;transit;forest_01.json;300;140;0;0;forest_1_bushes;Zona di transito
-Venezia;4
-Percorso_1;5
-Piacenza;6
-Percorso_2;7
-Milano;8
-Percorso_3;9
-Percorso_4;10
-Percorso_5;11
-Percorso_6;12
-Torino;13
-Grosseto;14
-Civitavecchia;15
-Percorso_7;16
-Cagliari;17
-Percorso_8;18
-Palermo;19
-Percorso_9;20
-ReggioCalabria;21
-Percorso_10;22
-Foggia;23
-Percorso_11;24
-Percorso_12;25
-Napoli;26
-Molisnt;27
-Percorso_13;28
-Pescara;29
-Percorso_14;30
-Roma;31
+﻿node_id;name;node_type;world_x;world_y;has_center;has_gym;local_map_file;encounter_group;notes
+start_lab;Laboratorio;lab;930;165;0;0;lab_start.tmx;;Scelta starter
+pordenone;Pordenone;town;930;165;1;0;pordenone.tmx;;Start
+venezia;Venezia;city;860;220;1;1;venezia.tmx;;Palestra
+piacenza;Piacenza;town;835;430;1;0;piacenza.tmx;;Paese
+milano;Milano;city;675;220;1;1;milano.tmx;;Palestra
+torino;Torino;city;525;290;1;1;torino.tmx;;Palestra
+pescara;Pescara;city;1070;430;1;1;pescara.tmx;;Palestra
+roma;Roma;city;925;560;1;1;roma.tmx;;Palestra
+napoli;Napoli;city;1230;620;1;1;napoli.tmx;;Palestra
+foggia;Foggia;city;1365;525;1;1;foggia.tmx;;Palestra
+reggio_calabria;Reggio Calabria;town;1375;815;1;0;reggio_calabria.tmx;;Paese
+palermo;Palermo;city;1140;860;1;1;palermo.tmx;;Palestra
+cagliari;Cagliari;city;805;860;1;1;cagliari.tmx;;Palestra
+civitavecchia;Civitavecchia;town;830;540;1;0;civitavecchia.tmx;;Paese
+lega_arkamon;Lega Arkamon;league;620;150;0;0;lega_arkamon.tmx;;Finale
+legendary_nw;Leggendario Nord;legendary;520;150;0;0;legendary_nw.tmx;;Evento
+legendary_s;Leggendario Sud;legendary;960;850;0;0;legendary_s.tmx;;Evento
+legendary_e;Leggendario Est;legendary;1465;520;0;0;legendary_e.tmx;;Evento
