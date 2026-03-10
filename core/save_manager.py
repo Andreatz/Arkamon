@@ -85,12 +85,12 @@ def save_player_state(players: Dict[int, dict], save_dir: str | Path = "saves/sl
 
 def load_pokemon_instances(save_dir: str | Path = "saves/slot_1") -> List[dict]:
     save_path = ensure_save_dir(save_dir)
-    return read_csv_rows(save_path / "arkamon_instances.csv")
+    return read_csv_rows(save_path / "pokemon_instances.csv")
 
 
 def save_pokemon_instances(rows: List[dict], save_dir: str | Path = "saves/slot_1") -> None:
     save_path = ensure_save_dir(save_dir)
-    write_csv_rows(save_path / "arkamon_instances.csv", POKEMON_INSTANCES_HEADER, rows)
+    write_csv_rows(save_path / "pokemon_instances.csv", POKEMON_INSTANCES_HEADER, rows)
 
 
 def next_instance_id(instances: List[dict]) -> int:

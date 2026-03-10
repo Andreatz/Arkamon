@@ -15,7 +15,7 @@ from save_manager import (
 
 
 STARTER_IDS = [1, 5, 9]
-START_LOCATION = "start_lab"
+START_LOCATION = "pordenone"
 POST_LAB_LOCATION = "venezia"
 STARTER_LEVEL = 5
 
