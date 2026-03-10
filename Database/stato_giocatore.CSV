@@ -1,4 +1,4 @@
-ID_Giocatore;Nome_Giocatore;Posizione_Corrente;Turno_Attivo;Monete;
+﻿ID_Giocatore;Nome_Giocatore;Posizione_Corrente;Turno_Attivo;Monete;
 1;Giocatore 1;Percorso_1;1;3000;
 2;Giocatore 2;Percorso_1;0;;
 ;;;;;
