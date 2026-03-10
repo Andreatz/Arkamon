@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-import csv
+import csv, json
 from pathlib import Path
 from typing import Dict, List
 
 from paths import SLOT_1_DIR
+
+LOCAL_MAP_STATE_FILE = "local_map_state.json"
 
 
 PLAYER_STATE_HEADER = [
@@ -130,3 +132,36 @@ def create_pokemon_instance(
         "exp": 0,
         "is_fainted": 0,
     }
+
+def load_local_map_state(save_dir: str | Path = SLOT_1_DIR) -> dict:
+    save_path = ensure_save_dir(save_dir)
+    file_path = save_path / LOCAL_MAP_STATE_FILE
+
+    if not file_path.exists():
+        return {"players": {}}
+
+    with file_path.open("r", encoding="utf-8") as f:
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return {"players": {}}
+
+
+def save_local_map_state(state: dict, save_dir: str | Path = SLOT_1_DIR) -> None:
+    save_path = ensure_save_dir(save_dir)
+    file_path = save_path / LOCAL_MAP_STATE_FILE
+
+    with file_path.open("w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2, ensure_ascii=False)
+
+
+def get_player_route_state(state: dict, player_id: int, route_id: str) -> dict:
+    players = state.setdefault("players", {})
+    player_key = str(player_id)
+    player_data = players.setdefault(player_key, {})
+    routes = player_data.setdefault("routes", {})
+    return routes.setdefault(route_id, {
+        "visited": False,
+        "cleared_bushes": [],
+        "defeated_npcs": []
+    })
