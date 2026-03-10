@@ -10,9 +10,12 @@
         "route_1": {
           "visited": true,
           "cleared_bushes": [
-            "b3"
+            "b3",
+            "b4"
           ],
-          "defeated_npcs": []
+          "defeated_npcs": [
+            "npc_1"
+          ]
         }
       }
     }

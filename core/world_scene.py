@@ -181,13 +181,18 @@ class WorldScene:
 
             x, y = self.node_screen_positions[node_id]
             color = self._node_color(node.node_type)
-            radius = NODE_RADIUS + 3 if node_id == self.hovered_node_id else NODE_RADIUS
+            radius = 12 if node_id == self.hovered_node_id else 9
 
-            pygame.draw.circle(self.screen, (20, 20, 20), (x, y), radius + 3)
+            pygame.draw.circle(self.screen, (20, 20, 20), (x, y), radius + 2)
             pygame.draw.circle(self.screen, color, (x, y), radius)
 
-            label = self.small_font.render(node.name, True, (10, 10, 10))
-            self.screen.blit(label, (x + 18, y - 10))
+            if node_id == self.hovered_node_id or node_id == self.selected_node_id:
+                label = self.small_font.render(node.name, True, (10, 10, 10))
+                label_bg = label.get_rect(topleft=(x + 14, y - 12))
+                pygame.draw.rect(self.screen, (255, 255, 255), label_bg.inflate(10, 6), border_radius=8)
+                pygame.draw.rect(self.screen, (30, 30, 30), label_bg.inflate(10, 6), 2, border_radius=8)
+                self.screen.blit(label, label_bg)
+
 
     def _draw_players(self) -> None:
         for player_id, token in self.tokens.items():
@@ -205,7 +210,7 @@ class WorldScene:
             pygame.draw.circle(self.screen, token.color, (x + ox, y + oy), 6)
 
     def _draw_ui(self) -> None:
-        panel = pygame.Rect(20, 20, 420, 150)
+        panel = pygame.Rect(20, 20, 340, 120)
         pygame.draw.rect(self.screen, (245, 245, 245), panel, border_radius=12)
         pygame.draw.rect(self.screen, (30, 30, 30), panel, 3, border_radius=12)
 
@@ -219,8 +224,8 @@ class WorldScene:
 
         lines = [
             turn_text,
-            "Clicca un nodo collegato per muoverti.",
-            "ESC = menu",
+            "Click = muovi",
+            "INVIO/E = entra nel nodo",
         ]
 
         y = 85

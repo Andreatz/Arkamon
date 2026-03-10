@@ -6,7 +6,7 @@
     "player_id": 1,
     "trainer_name": "Giocatore 1",
     "active_instance_id": 1,
-    "current_hp": 18,
+    "current_hp": 3,
     "status": null,
     "status_turns": 0,
     "party_slot": 1,
@@ -15,12 +15,12 @@
   "side_b": {
     "player_id": 0,
     "trainer_name": "Pokémon Selvatico",
-    "wild_species_id": 13,
-    "wild_species_name": "Wormaren",
+    "wild_species_id": 20,
+    "wild_species_name": "Handipus",
     "active_instance_id": null,
     "level": 5,
-    "current_hp": 18,
-    "hp_max": 18,
+    "current_hp": 0,
+    "hp_max": 20,
     "status": null,
     "status_turns": 0,
     "party_slot": 1,
@@ -30,13 +30,14 @@
   "encounter_meta": {
     "route_node_id": "route_1",
     "area_id": "Percorso_1",
-    "bush_id": "b3",
-    "encounter_group": "C"
+    "bush_id": "b4",
+    "encounter_group": "D"
   },
   "pending_evolution": {
     "enabled": false,
     "instance_id": null,
     "from_species_id": null,
     "to_species_id": null
-  }
+  },
+  "battle_result": "player_win"
 }

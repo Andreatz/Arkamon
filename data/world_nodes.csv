@@ -1,33 +1,33 @@
 ﻿node_id;name;node_type;world_x;world_y;has_center;has_gym;local_map_file;encounter_group;notes
-pordenone;Pordenone;town;960;165;1;0;pordenone.tmx;;Start del gioco
-route_1;Percorso 1;route;930;330;0;0;route_1.tmx;route_1;Erba e allenatori
-venezia;Venezia;city;930;220;1;1;venezia.tmx;;Città con palestra
-piacenza;Piacenza;town;760;330;1;0;piacenza.tmx;;Paese di transito
-route_2;Percorso 2;route;700;265;0;0;route_2.tmx;route_2;Erba e allenatori
-milano;Milano;city;675;220;1;1;milano.tmx;;Città con palestra
-route_3;Percorso 3;route;560;150;0;0;route_3.tmx;route_3;Erba e allenatori
-league_arkamon;Lega Arkamon;league;640;70;0;0;league_arkamon.tmx;;Sfida finale
-legendary_nw;Leggendario Nord;legendary;505;95;0;0;legendary_nw.tmx;;Evento speciale
-route_4;Percorso 4;route;625;265;0;0;route_4.tmx;route_4;Erba e allenatori
-torino;Torino;city;560;290;1;1;torino.tmx;;Città con palestra
-route_5;Percorso 5;route;625;360;0;0;route_5.tmx;route_5;Erba e allenatori
-route_6;Percorso 6;route;485;335;0;0;route_6.tmx;route_6;Erba e allenatori
-civitavecchia;Civitavecchia;town;845;540;1;0;civitavecchia.tmx;;Paese di transito
-route_7;Percorso 7;route;760;730;0;0;route_7.tmx;route_7;Erba e allenatori
-cagliari;Cagliari;city;805;860;1;1;cagliari.tmx;;Città con palestra
-route_8;Percorso 8;route;965;850;0;0;route_8.tmx;route_8;Erba e allenatori
-legendary_s;Leggendario Sud;legendary;865;930;0;0;legendary_s.tmx;;Evento speciale
-palermo;Palermo;city;1140;860;1;1;palermo.tmx;;Città con palestra
-route_9;Percorso 9;route;1310;795;0;0;route_9.tmx;route_9;Erba e allenatori
-reggio_calabria;Reggio Calabria;town;1375;815;1;0;reggio_calabria.tmx;;Nodo sud-est
-route_10;Percorso 10;route;1328;620;0;0;route_10.tmx;route_10;Erba e allenatori
-foggia;Foggia;city;1365;525;1;1;foggia.tmx;;Città con palestra
-route_11;Percorso 11;route;1470;520;0;0;route_11.tmx;route_11;Erba e allenatori
-legendary_e;Leggendario Est;legendary;1535;500;0;0;legendary_e.tmx;;Evento speciale
-route_12;Percorso 12;route;1285;500;0;0;route_12.tmx;route_12;Erba e allenatori
-napoli;Napoli;city;1230;620;1;1;napoli.tmx;;Città con palestra
-route_13;Percorso 13;route;1180;430;0;0;route_13.tmx;route_13;Erba e allenatori
-pescara;Pescara;city;1070;430;1;1;pescara.tmx;;Città con palestra
-route_14;Percorso 14;route;1070;570;0;0;route_14.tmx;route_14;Erba e allenatori
-roma;Roma;city;960;560;1;1;roma.tmx;;Città con palestra
-route_15;Percorso 15;route;970;430;0;0;route_15.tmx;route_15;Erba e allenatori
+pordenone;Pordenone;town;970;205;1;0;pordenone.tmx;;Start del gioco
+route_1;Percorso 1;route;930;385;0;0;route_1.tmx;route_1;Erba e allenatori
+venezia;Venezia;city;915;285;1;1;venezia.tmx;;Città con palestra
+piacenza;Piacenza;town;745;385;1;0;piacenza.tmx;;Paese di transito
+route_2;Percorso 2;route;690;310;0;0;route_2.tmx;route_2;Erba e allenatori
+milano;Milano;city;655;255;1;1;milano.tmx;;Città con palestra
+route_3;Percorso 3;route;545;150;0;0;route_3.tmx;route_3;Erba e allenatori
+league_arkamon;Lega Arkamon;league;635;110;0;0;league_arkamon.tmx;;Sfida finale
+legendary_nw;Leggendario Nord;legendary;485;140;0;0;legendary_nw.tmx;;Evento speciale
+route_4;Percorso 4;route;610;305;0;0;route_4.tmx;route_4;Erba e allenatori
+torino;Torino;city;545;340;1;1;torino.tmx;;Città con palestra
+route_5;Percorso 5;route;610;430;0;0;route_5.tmx;route_5;Erba e allenatori
+route_6;Percorso 6;route;460;385;0;0;route_6.tmx;route_6;Erba e allenatori
+civitavecchia;Civitavecchia;town;830;610;1;0;civitavecchia.tmx;;Paese di transito
+route_7;Percorso 7;route;710;765;0;0;route_7.tmx;route_7;Erba e allenatori
+cagliari;Cagliari;city;760;900;1;1;cagliari.tmx;;Città con palestra
+route_8;Percorso 8;route;930;895;0;0;route_8.tmx;route_8;Erba e allenatori
+legendary_s;Leggendario Sud;legendary;820;1010;0;0;legendary_s.tmx;;Evento speciale
+palermo;Palermo;city;1095;900;1;1;palermo.tmx;;Città con palestra
+route_9;Percorso 9;route;1260;835;0;0;route_9.tmx;route_9;Erba e allenatori
+reggio_calabria;Reggio Calabria;town;1325;850;1;0;reggio_calabria.tmx;;Nodo sud-est
+route_10;Percorso 10;route;1300;675;0;0;route_10.tmx;route_10;Erba e allenatori
+foggia;Foggia;city;1330;560;1;1;foggia.tmx;;Città con palestra
+route_11;Percorso 11;route;1455;555;0;0;route_11.tmx;route_11;Erba e allenatori
+legendary_e;Leggendario Est;legendary;1515;535;0;0;legendary_e.tmx;;Evento speciale
+route_12;Percorso 12;route;1210;640;0;0;route_12.tmx;route_12;Erba e allenatori
+napoli;Napoli;city;1160;735;1;1;napoli.tmx;;Città con palestra
+route_13;Percorso 13;route;1120;510;0;0;route_13.tmx;route_13;Erba e allenatori
+pescara;Pescara;city;1015;505;1;1;pescara.tmx;;Città con palestra
+route_14;Percorso 14;route;1015;645;0;0;route_14.tmx;route_14;Erba e allenatori
+roma;Roma;city;900;635;1;1;roma.tmx;;Città con palestra
+route_15;Percorso 15;route;900;490;0;0;route_15.tmx;route_15;Erba e allenatori
