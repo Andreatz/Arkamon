@@ -1,4 +1,4 @@
-﻿ID;Nome;Categoria;Tipo;HP_Base;Mossa1_ID;Mossa2_ID;Mossa3_ID;Livello_Evoluzione;Evoluzione_ID;Tasso_Cattura
+﻿species_id;name;hp_growth_id;type_id;base_hp;move_1_id;move_2_id;move_3_id;evolution_level;evolves_to_id;catch_rate
 1;Vyrath;Media;Normale;12;1;111;0;15;2;5
 2;Vyrath;Media;Normale;12;2;112;0;35;3;4
 3;Vyrath;Media;Normale;12;3;113;0;55;4;3

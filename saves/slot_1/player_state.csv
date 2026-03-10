@@ -1,0 +1,3 @@
+﻿player_id;name;current_location;money;badges;active_party_slot;turn_order_status;
+1;Melia;Percorso_1;3000;0;1;1;
+2;Maggi;Percorso_1;1500;0;1;0;

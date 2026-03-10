@@ -1,4 +1,4 @@
-﻿Luogo;Cespuglio;ID_Pokemon;Probabilità;Livello Min;Livello Max
+﻿area_id;encounter_group;species_id;rarity_weight;min_level;max_level
 Percorso_1;A;13;Comune;5;5
 Percorso_1;A;16;Comune;5;5
 Percorso_1;A;20;Medio;5;6

@@ -1,0 +1,34 @@
+{
+  "battle_type": "pvp",
+  "return_node": "route_1",
+  "turn": "A",
+  "side_a": {
+    "player_id": 1,
+    "trainer_name": "Giocatore 1",
+    "active_instance_id": 1001,
+    "current_hp": 19,
+    "status": null,
+    "status_turns": 0,
+    "party_slot": 1,
+    "ko_slots": []
+  },
+  "side_b": {
+    "player_id": 201,
+    "trainer_name": "Rivale",
+    "wild_species_id": null,
+    "active_instance_id": 32,
+    "level": 5,
+    "current_hp": 1,
+    "status": null,
+    "status_turns": 0,
+    "party_slot": 2,
+    "ko_slots": [1, 3]
+  },
+  "capture_allowed": false,
+  "pending_evolution": {
+    "enabled": false,
+    "instance_id": null,
+    "from_species_id": null,
+    "to_species_id": null
+  }
+}

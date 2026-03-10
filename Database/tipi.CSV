@@ -1,9 +1,0 @@
-﻿Attacco/Difesa;Normale;Elettro;Fuoco;Terra;Acqua;Erba;Oscurità;Psico
-Normale;1;1;1;1;1;1;1;1
-Elettro;1;1;1;0.5;1.5;1;1;1
-Fuoco;1;1;1;1;0.5;1.5;1;1
-Terra;1;1.5;1;1;1;0.5;1;1
-Acqua;1;0.5;1.5;1.5;1;1;1;1
-Erba;1;1;0.5;1;1.5;1;1;1
-Oscurità;1;1;1;1;1;1;1;1.5
-Psico;1;1;1;1;1;1;1.5;1

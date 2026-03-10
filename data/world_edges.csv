@@ -1,0 +1,4 @@
+﻿edge_id;from_node;to_node;path_type;cost;unlock_rule;bidirectional
+e1;start_lab;venezia;road;1;always;1
+e2;venezia;route_1;road;1;always;1
+e3;route_1;forest_1;road;1;badge_1;1

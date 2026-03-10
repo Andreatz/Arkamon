@@ -1,0 +1,14 @@
+﻿instance_id;owner_id;storage;slot;species_id;nickname;level;hp_max;hp_current;exp
+1001;1;party;1;6;Darklaw;17;30;30;0
+1002;1;party;2;42;Felvex;5;12;12;0
+1007;1;party;3;47;Weedrug;5;12;12;0
+1004;1;party;4;56;Deephion;5;12;12;0
+1005;1;party;5;46;Spectron;5;12;12;0
+1006;1;party;6;103;Boomrock;5;12;12;0
+1007;1;box;1;32;Blazion;5;12;12;0
+1008;1;box;2;16;Clastoom;5;12;12;0
+1009;1;box;3;20;Handipus;6;14;14;0
+2001;2;party;1;9;Felyss;5;12;12;0
+2002;2;party;2;13;Wormaren;5;12;12;0
+2003;2;box;1;46;Spectron5;12;12;0
+2004;2;box;2;47;Weedrug5;12;12;0
