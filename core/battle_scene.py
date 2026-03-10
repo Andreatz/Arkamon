@@ -1,10 +1,23 @@
 from __future__ import annotations
 
+import random
 import pygame
 
 from paths import SLOT_1_DIR
-from save_manager import load_battle_state, load_pokemon_instances, save_battle_state
-from battle_service import get_instance_by_id, get_species, get_move_ids_for_species, resolve_player_attack
+from save_manager import (
+    load_battle_state,
+    load_pokemon_instances,
+    save_battle_state,
+    save_pokemon_instances,
+    next_instance_id,
+    create_pokemon_instance,
+)
+from battle_service import (
+    get_instance_by_id,
+    get_species,
+    get_move_ids_for_species,
+    resolve_player_attack,
+)
 
 
 class BattleScene:
@@ -160,3 +173,130 @@ class BattleScene:
             pygame.draw.rect(self.screen, (40, 40, 40), rect, 3, border_radius=10)
             surf = self.small_font.render(labels[key], True, (20, 20, 20))
             self.screen.blit(surf, (rect.x + 18, rect.y + 18))
+
+        if self.battle_state.get("battle_result") == "player_win":
+            win_msg = self.font_text.render("Hai vinto. Clicca un pulsante per uscire.", True, (20, 120, 20))
+            self.screen.blit(win_msg, (60, 470))
+        elif self.battle_state.get("battle_result") == "wild_win":
+            lose_msg = self.font_text.render("Hai perso. Clicca un pulsante per uscire.", True, (160, 40, 40))
+            self.screen.blit(lose_msg, (60, 470))
+        elif self.battle_state.get("battle_result") == "captured":
+            cap_msg = self.font_text.render("Pokémon catturato. Clicca un pulsante per uscire.", True, (20, 120, 20))
+            self.screen.blit(cap_msg, (60, 470))
+
+
+    def _get_player_party(self, player_id: int) -> list[dict]:
+        party = []
+        for row in self.instances:
+            try:
+                if int(row.get("owner_id", -1)) != int(player_id):
+                    continue
+            except (TypeError, ValueError):
+                continue
+
+            if str(row.get("owner_type", "")).strip().lower() != "player":
+                continue
+            if str(row.get("storage", "")).strip().lower() != "party":
+                continue
+
+            party.append(row)
+
+        party.sort(key=lambda r: int(r.get("slot", 999)))
+        return party
+
+
+    def _get_player_box(self, player_id: int) -> list[dict]:
+        box_rows = []
+        for row in self.instances:
+            try:
+                if int(row.get("owner_id", -1)) != int(player_id):
+                    continue
+            except (TypeError, ValueError):
+                continue
+
+            if str(row.get("owner_type", "")).strip().lower() != "player":
+                continue
+            if str(row.get("storage", "")).strip().lower() != "box":
+                continue
+
+            box_rows.append(row)
+
+        box_rows.sort(key=lambda r: int(r.get("slot", 999)))
+        return box_rows
+
+
+    def _close_battle_to_world(self) -> None:
+        self.game.change_scene("world")
+
+
+    def _try_capture(self) -> None:
+        if not self.battle_state.get("capture_allowed"):
+            self.message = "Cattura non disponibile."
+            return
+
+        if self.battle_state.get("battle_type") != "wild":
+            self.message = "Puoi catturare solo i Pokémon selvatici."
+            return
+
+        side_a = self.battle_state.get("side_a", {})
+        side_b = self.battle_state.get("side_b", {})
+
+        player_id = side_a.get("player_id")
+        species_id = side_b.get("wild_species_id")
+        current_hp = int(side_b.get("current_hp", 1))
+        hp_max = int(side_b.get("hp_max", 1))
+        level = int(side_b.get("level", 1))
+
+        if not player_id or not species_id:
+            self.message = "Dati cattura incompleti."
+            return
+
+        species = self.game.data.species.get(int(species_id))
+        if not species:
+            self.message = "Specie selvaggia non trovata."
+            return
+
+        catch_rate = int(getattr(species, "catch_rate", 0) or 0)
+
+        hp_factor = 1.0 - (current_hp / max(1, hp_max))
+        chance = 0.20 + hp_factor * 0.50 + min(catch_rate, 100) / 500.0
+        chance = max(0.05, min(0.95, chance))
+
+        if random.random() > chance:
+            self.message = "Il Pokémon si è liberato!"
+            return
+
+        party = self._get_player_party(player_id)
+        box_rows = self._get_player_box(player_id)
+
+        if len(party) < 6:
+            storage = "party"
+            slot = len(party) + 1
+        else:
+            storage = "box"
+            slot = len(box_rows) + 1
+
+        new_instance_id = next_instance_id(self.instances)
+
+        self.instances.append(
+            create_pokemon_instance(
+                instance_id=new_instance_id,
+                owner_id=int(player_id),
+                owner_type="player",
+                storage=storage,
+                slot=slot,
+                species_id=int(species_id),
+                level=level,
+                hp_max=hp_max,
+                nickname="",
+            )
+        )
+
+        save_pokemon_instances(self.instances, SLOT_1_DIR)
+        self.battle_state["battle_result"] = "captured"
+        save_battle_state(self.battle_state, SLOT_1_DIR)
+
+        if storage == "party":
+            self.message = f"{species.name} catturato e aggiunto alla squadra!"
+        else:
+            self.message = f"{species.name} catturato e inviato al box!"
