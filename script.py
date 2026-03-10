@@ -3,8 +3,8 @@ import pandas as pd
 import re
 
 ROOT = Path(".")
-MOSSE_PATH = ROOT / "data" / "mosse.csv"
-PINO_PATH = ROOT / "docs" / "Pino.xlsx"   # cambia il path se serve
+MOSSE_PATH = ROOT / "data" / "moves.csv"
+PINO_PATH = ROOT / "Pino.xlsx"
 OUT_DIR = ROOT / "data"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
