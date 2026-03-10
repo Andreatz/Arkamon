@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import pygame
 
 from save_manager import load_player_state, save_player_state
+from paths import MAPS_DIR, SLOT_1_DIR
 
 
-MAP_IMAGE_PATH = Path("assets/maps/Mappa-Finale.jpg")
+MAP_IMAGE_PATH = MAPS_DIR / "Mappa-Finale.jpg"
 NODE_RADIUS = 18
 
 
@@ -28,7 +28,7 @@ class WorldScene:
         self.font_text = game.font_text
         self.small_font = pygame.font.SysFont("arial", 20)
 
-        self.players = load_player_state("saves/slot_1")
+        self.players = load_player_state(SLOT_1_DIR)
         self.current_turn = self._get_first_player()
         self.selected_node_id: Optional[str] = None
         self.hovered_node_id: Optional[str] = None
@@ -39,7 +39,9 @@ class WorldScene:
         }
 
         self.map_surface = self._load_map()
-        self.map_rect = self.map_surface.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() // 2))
+        self.map_rect = self.map_surface.get_rect(
+            center=(self.screen.get_width() // 2, self.screen.get_height() // 2)
+        )
 
         self.node_screen_positions = self._build_node_positions()
         self.adjacency = self._build_adjacency()
@@ -47,7 +49,10 @@ class WorldScene:
     def _load_map(self) -> pygame.Surface:
         if MAP_IMAGE_PATH.exists():
             image = pygame.image.load(str(MAP_IMAGE_PATH)).convert()
-            return pygame.transform.smoothscale(image, (self.screen.get_width(), self.screen.get_height()))
+            return pygame.transform.smoothscale(
+                image, (self.screen.get_width(), self.screen.get_height())
+            )
+
         fallback = pygame.Surface((self.screen.get_width(), self.screen.get_height()))
         fallback.fill((30, 40, 55))
         return fallback
@@ -109,7 +114,7 @@ class WorldScene:
         if node_id in valid_destinations:
             self.players[self.current_turn]["current_location"] = node_id
             self.players[self.current_turn]["turn_order_status"] = 0
-            save_player_state(self.players, "saves/slot_1")
+            save_player_state(self.players, SLOT_1_DIR)
             self.selected_node_id = node_id
             self._advance_turn()
 
@@ -194,7 +199,7 @@ class WorldScene:
         lines = [
             turn_text,
             "Clicca un nodo collegato per muoverti.",
-            "Rosso = Giocatore 1, Blu = Giocatore 2",
+            "ESC = menu",
         ]
 
         y = 85

@@ -4,6 +4,7 @@ import csv
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
+from paths import DATA_DIR
 
 
 def _clean_key(value: str) -> str:
@@ -140,7 +141,7 @@ class GameData:
 
 
 class DataLoader:
-    def __init__(self, data_dir: str | Path = "data", strict: bool = False):
+    def __init__(self, data_dir: str | Path = DATA_DIR, strict: bool = False):
         self.data_dir = Path(data_dir)
         self.strict = strict
         self.warnings: List[str] = []
@@ -470,7 +471,7 @@ class DataLoader:
 
 
 if __name__ == "__main__":
-    loader = DataLoader(data_dir="data", strict=False)
+    loader = DataLoader(data_dir=DATA_DIR, strict=False)
     game_data = loader.load_all()
 
     print("=== DATA LOADED ===")
@@ -489,3 +490,4 @@ if __name__ == "__main__":
         print("\n=== WARNINGS ===")
         for warning in game_data.warnings:
             print("-", warning)
+

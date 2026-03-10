@@ -4,13 +4,17 @@ import pygame
 
 from data_loader import DataLoader
 from lab_scene import LabScene
+from menu_scene import MenuScene
 from world_scene import WorldScene
 from save_manager import load_pokemon_instances, load_player_state
+from paths import DATA_DIR, SLOT_1_DIR
+
 
 SCREEN_WIDTH = 1280
 SCREEN_HEIGHT = 720
 FPS = 60
 TITLE = "Arkamon"
+
 
 class Game:
     def __init__(self) -> None:
@@ -23,19 +27,15 @@ class Game:
         self.font_title = pygame.font.SysFont("arial", 42, bold=True)
         self.font_text = pygame.font.SysFont("arial", 26)
 
-        self.data = DataLoader("data", strict=False).load_all()
-
+        self.data = DataLoader(DATA_DIR, strict=False).load_all()
         self.scenes = {}
         self.current_scene = None
 
-        if self._should_start_in_lab():
-            self.change_scene("lab")
-        else:
-            self.change_scene("world")
+        self.change_scene("menu")
 
     def _should_start_in_lab(self) -> bool:
-        players = load_player_state("saves/slot_1")
-        instances = load_pokemon_instances("saves/slot_1")
+        players = load_player_state(SLOT_1_DIR)
+        instances = load_pokemon_instances(SLOT_1_DIR)
 
         if len(players) < 2:
             return True
@@ -55,12 +55,21 @@ class Game:
         return not ({1, 2}.issubset(player_ids_with_starter))
 
     def change_scene(self, scene_name: str) -> None:
-        if scene_name == "lab":
+        if scene_name == "menu":
+            self.scenes["menu"] = MenuScene(self)
+            self.current_scene = self.scenes["menu"]
+        elif scene_name == "lab":
             self.scenes["lab"] = LabScene(self)
             self.current_scene = self.scenes["lab"]
         elif scene_name == "world":
             self.scenes["world"] = WorldScene(self)
             self.current_scene = self.scenes["world"]
+
+    def start_or_continue_game(self) -> None:
+        if self._should_start_in_lab():
+            self.change_scene("lab")
+        else:
+            self.change_scene("world")
 
     def handle_events(self) -> None:
         for event in pygame.event.get():

@@ -12,7 +12,7 @@ from save_manager import (
     next_instance_id,
     create_pokemon_instance,
 )
-
+from paths import SLOT_1_DIR
 
 STARTER_IDS = [1, 5, 9]
 START_LOCATION = "pordenone"
@@ -36,8 +36,8 @@ class LabScene:
         self.font_text = game.font_text
         self.small_font = pygame.font.SysFont("arial", 22)
 
-        self.players = load_player_state("saves/slot_1")
-        self.instances = load_pokemon_instances("saves/slot_1")
+        self.players = load_player_state(SLOT_1_DIR)
+        self.instances = load_pokemon_instances(SLOT_1_DIR)
 
         self.phase = 0
         self.player_order = sorted(self.players.keys())[:2]
@@ -99,10 +99,8 @@ class LabScene:
     def select_starter(self, species_id: int) -> None:
         if self.finished:
             return
-
         if species_id in self.choices.values():
             return
-
         if self.phase >= len(self.player_order):
             return
 
@@ -118,7 +116,7 @@ class LabScene:
     def finalize_selection(self) -> None:
         next_id = next_instance_id(self.instances)
 
-        for slot_index, player_id in enumerate(self.player_order, start=1):
+        for player_id in self.player_order:
             species_id = self.choices[player_id]
             species = self.game.data.species[species_id]
             hp_gain = self.game.data.hp_growth.get(species.hp_growth_id, 1)
@@ -161,8 +159,8 @@ class LabScene:
                 )
             )
 
-        save_player_state(self.players, "saves/slot_1")
-        save_pokemon_instances(self.instances, "saves/slot_1")
+        save_player_state(self.players, SLOT_1_DIR)
+        save_pokemon_instances(self.instances, SLOT_1_DIR)
         self.finished = True
 
     def update(self, dt: float) -> None:
@@ -201,6 +199,7 @@ class LabScene:
         for i, card in enumerate(self.cards, start=1):
             chosen = card.species_id in self.choices.values()
             color = (65, 85, 120) if not chosen else (70, 125, 80)
+
             pygame.draw.rect(self.screen, color, card.rect, border_radius=12)
             pygame.draw.rect(self.screen, (220, 220, 220), card.rect, width=3, border_radius=12)
 
@@ -233,9 +232,5 @@ class LabScene:
 
         if self.finished and self.rival_species_id is not None:
             rival_name = self.game.data.species[self.rival_species_id].name
-            surf = self.font_text.render(
-                f"Rivale: {rival_name}",
-                True,
-                (255, 170, 170),
-            )
+            surf = self.font_text.render(f"Rivale: {rival_name}", True, (255, 170, 170))
             self.screen.blit(surf, (70, y))

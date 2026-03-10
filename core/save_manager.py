@@ -4,6 +4,8 @@ import csv
 from pathlib import Path
 from typing import Dict, List
 
+from paths import SLOT_1_DIR
+
 
 PLAYER_STATE_HEADER = [
     "player_id",
@@ -54,7 +56,7 @@ def write_csv_rows(file_path: Path, header: List[str], rows: List[dict], delimit
             writer.writerow(row)
 
 
-def load_player_state(save_dir: str | Path = "saves/slot_1") -> Dict[int, dict]:
+def load_player_state(save_dir: str | Path = SLOT_1_DIR) -> Dict[int, dict]:
     save_path = ensure_save_dir(save_dir)
     rows = read_csv_rows(save_path / "player_state.csv")
     players = {}
@@ -77,18 +79,18 @@ def load_player_state(save_dir: str | Path = "saves/slot_1") -> Dict[int, dict]:
     return players
 
 
-def save_player_state(players: Dict[int, dict], save_dir: str | Path = "saves/slot_1") -> None:
+def save_player_state(players: Dict[int, dict], save_dir: str | Path = SLOT_1_DIR) -> None:
     save_path = ensure_save_dir(save_dir)
     rows = [players[player_id] for player_id in sorted(players)]
     write_csv_rows(save_path / "player_state.csv", PLAYER_STATE_HEADER, rows)
 
 
-def load_pokemon_instances(save_dir: str | Path = "saves/slot_1") -> List[dict]:
+def load_pokemon_instances(save_dir: str | Path = SLOT_1_DIR) -> List[dict]:
     save_path = ensure_save_dir(save_dir)
     return read_csv_rows(save_path / "pokemon_instances.csv")
 
 
-def save_pokemon_instances(rows: List[dict], save_dir: str | Path = "saves/slot_1") -> None:
+def save_pokemon_instances(rows: List[dict], save_dir: str | Path = SLOT_1_DIR) -> None:
     save_path = ensure_save_dir(save_dir)
     write_csv_rows(save_path / "pokemon_instances.csv", POKEMON_INSTANCES_HEADER, rows)
 
