@@ -20,6 +20,3 @@ Stato_Pre_Evo;0;Il pokemon che si sta evolvendo;
 Stato_Post_Evo;0;L'evoluzione del pokemon;
 ID_Istanza_Evo;0;L'istanza ID del pokemon che si sta evolvendo;
 Evoluzione_In_Attesa;0;Un flag (1 = Sì, 0 = No);
-;;;
-;;;
-;;;
