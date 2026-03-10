@@ -3,7 +3,8 @@ from __future__ import annotations
 import pygame
 
 from paths import SLOT_1_DIR
-from save_manager import load_battle_state, load_pokemon_instances
+from save_manager import load_battle_state, load_pokemon_instances, save_battle_state
+from battle_service import get_instance_by_id, get_species, get_move_ids_for_species, resolve_player_attack
 
 
 class BattleScene:
@@ -36,7 +37,39 @@ class BattleScene:
             species_name = side_b.get("wild_species_name", "???")
             level = side_b.get("level", "?")
             return f"Un {species_name} selvatico di livello {level} appare!"
+
         return "Battaglia caricata."
+
+    def _get_active_player_instance(self):
+        side_a = self.battle_state.get("side_a", {})
+        instance_id = side_a.get("active_instance_id")
+        if instance_id is None:
+            return None
+        return get_instance_by_id(self.instances, instance_id)
+
+    def _get_player_move_labels(self) -> dict[str, str]:
+        labels = {
+            "move_1": "Mossa 1",
+            "move_2": "Mossa 2",
+            "move_3": "Mossa 3",
+            "capture": "Cattura",
+            "switch": "Cambia",
+        }
+
+        player_instance = self._get_active_player_instance()
+        if not player_instance:
+            return labels
+
+        species = get_species(self.game.data, player_instance["species_id"])
+        if not species:
+            return labels
+
+        move_ids = get_move_ids_for_species(species)
+        for idx, move_id in enumerate(move_ids[:3], start=1):
+            move_meta = self.game.data.moves_meta.get(move_id)
+            labels[f"move_{idx}"] = move_meta.move_name if move_meta else f"Mossa {move_id}"
+
+        return labels
 
     def handle_event(self, event) -> None:
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -50,22 +83,34 @@ class BattleScene:
                     break
 
     def _handle_button(self, key: str) -> None:
+        if self.battle_state.get("battle_result") in {"player_win", "wild_win"}:
+            self.game.change_scene("world")
+            return
+
         if key.startswith("move_"):
-            self.message = f"Hai selezionato {key}. Qui collegheremo il sistema danni."
+            move_index = int(key.split("_")[1]) - 1
+            self.battle_state, self.message = resolve_player_attack(
+                self.game.data,
+                self.battle_state,
+                self.instances,
+                move_index,
+            )
+            save_battle_state(self.battle_state, SLOT_1_DIR)
+
         elif key == "capture":
             if self.battle_state.get("capture_allowed"):
-                self.message = "Qui collegheremo la cattura."
+                self.message = "La cattura sarà il prossimo step."
             else:
                 self.message = "Cattura non disponibile."
+
         elif key == "switch":
-            self.message = "Qui collegheremo il cambio Pokémon."
+            self.message = "Il cambio Pokémon sarà il prossimo step."
 
     def update(self, dt: float) -> None:
         pass
 
     def draw(self) -> None:
         self.screen.fill((210, 235, 255))
-
         pygame.draw.rect(self.screen, (120, 180, 120), (0, 350, 1280, 370))
 
         title = self.font_title.render("Battaglia", True, (25, 25, 25))
@@ -101,13 +146,14 @@ class BattleScene:
         msg = self.font_text.render(self.message, True, (30, 30, 30))
         self.screen.blit(msg, (60, 430))
 
-        labels = {
-            "move_1": "Mossa 1",
-            "move_2": "Mossa 2",
-            "move_3": "Mossa 3",
-            "capture": "Cattura",
-            "switch": "Cambia",
-        }
+        if self.battle_state.get("battle_result") == "player_win":
+            win_msg = self.font_text.render("Hai vinto. Clicca un pulsante per uscire.", True, (20, 120, 20))
+            self.screen.blit(win_msg, (60, 470))
+        elif self.battle_state.get("battle_result") == "wild_win":
+            lose_msg = self.font_text.render("Hai perso. Clicca un pulsante per uscire.", True, (160, 40, 40))
+            self.screen.blit(lose_msg, (60, 470))
+
+        labels = self._get_player_move_labels()
 
         for key, rect in self.buttons.items():
             pygame.draw.rect(self.screen, (245, 245, 245), rect, border_radius=10)

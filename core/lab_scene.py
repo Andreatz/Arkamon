@@ -38,6 +38,7 @@ class LabScene:
 
         self.players = load_player_state(SLOT_1_DIR)
         self.instances = load_pokemon_instances(SLOT_1_DIR)
+        self._ensure_default_players()
 
         self.phase = 0
         self.player_order = sorted(self.players.keys())[:2]
@@ -173,13 +174,26 @@ class LabScene:
         self.screen.blit(title, (70, 50))
 
         if not self.finished:
-            current_player_id = self.player_order[self.phase]
-            player_name = self.players[current_player_id]["name"]
-            subtitle = self.font_text.render(
-                f"Tocca a Giocatore {current_player_id} - {player_name}",
-                True,
-                (255, 220, 140),
-            )
+            if len(self.player_order) < 2:
+                subtitle = self.font_text.render(
+                    "Errore: servono due giocatori inizializzati nel save.",
+                    True,
+                    (255, 120, 120),
+                )
+            elif self.phase >= len(self.player_order):
+                subtitle = self.font_text.render(
+                    "Scelta in corso di finalizzazione...",
+                    True,
+                    (255, 220, 140),
+                )
+            else:
+                current_player_id = self.player_order[self.phase]
+                player_name = self.players[current_player_id]["name"]
+                subtitle = self.font_text.render(
+                    f"Tocca a Giocatore {current_player_id} - {player_name}",
+                    True,
+                    (255, 220, 140),
+                )
             self.screen.blit(subtitle, (70, 110))
         else:
             subtitle = self.font_text.render(
@@ -234,3 +248,35 @@ class LabScene:
             rival_name = self.game.data.species[self.rival_species_id].name
             surf = self.font_text.render(f"Rivale: {rival_name}", True, (255, 170, 170))
             self.screen.blit(surf, (70, y))
+
+
+    def _ensure_default_players(self) -> None:
+        if len(self.players) >= 2:
+            return
+
+        default_players = {
+            1: {
+                "player_id": 1,
+                "name": "Giocatore 1",
+                "current_location": "pordenone",
+                "money": 0,
+                "badges": 0,
+                "active_party_slot": 0,
+                "turn_order_status": 0,
+            },
+            2: {
+                "player_id": 2,
+                "name": "Giocatore 2",
+                "current_location": "pordenone",
+                "money": 0,
+                "badges": 0,
+                "active_party_slot": 0,
+                "turn_order_status": 0,
+            },
+        }
+
+        for player_id, player_data in default_players.items():
+            if player_id not in self.players:
+                self.players[player_id] = player_data
+
+        save_player_state(self.players, SLOT_1_DIR)

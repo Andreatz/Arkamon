@@ -1,1 +1,4 @@
-﻿instance_id;owner_id;owner_type;storage;slot;species_id;nickname;level;hp_current;hp_max;exp;is_fainted;
+instance_id;owner_id;owner_type;storage;slot;species_id;nickname;level;hp_current;hp_max;exp;is_fainted
+1;1;player;party;1;1;;5;18;18;0;0
+2;2;player;party;1;5;;5;18;18;0;0
+3;999;rival;party;1;9;;5;18;18;0;0
