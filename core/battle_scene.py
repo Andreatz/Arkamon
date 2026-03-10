@@ -17,6 +17,9 @@ from battle_service import (
     get_species,
     get_move_ids_for_species,
     resolve_player_attack,
+    get_player_party,
+    switch_player_pokemon,
+    sync_active_instance_from_battle,
 )
 
 
@@ -27,6 +30,7 @@ class BattleScene:
         self.font_title = game.font_title
         self.font_text = game.font_text
         self.small_font = pygame.font.SysFont("arial", 20)
+        self.awaiting_switch = False
 
         self.battle_state = load_battle_state(SLOT_1_DIR)
         self.instances = load_pokemon_instances(SLOT_1_DIR)
@@ -213,9 +217,30 @@ class BattleScene:
             self.message = f"{species.name} catturato e inviato al box!"
 
     def handle_event(self, event) -> None:
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-            self._return_after_battle()
-            return
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                self._return_after_battle()
+                return
+
+            if self.awaiting_switch:
+                key_to_slot = {
+                    pygame.K_1: 1,
+                    pygame.K_2: 2,
+                    pygame.K_3: 3,
+                    pygame.K_4: 4,
+                    pygame.K_5: 5,
+                    pygame.K_6: 6,
+                }
+                if event.key in key_to_slot:
+                    slot = key_to_slot[event.key]
+                    self.battle_state, self.message = switch_player_pokemon(
+                        self.battle_state,
+                        self.instances,
+                        slot,
+                    )
+                    self.awaiting_switch = False
+                    save_battle_state(self.battle_state, SLOT_1_DIR)
+                    return
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             for key, rect in self.buttons.items():
@@ -236,13 +261,19 @@ class BattleScene:
                 self.instances,
                 move_index,
             )
+            self._sync_instances_after_turn()
             save_battle_state(self.battle_state, SLOT_1_DIR)
 
         elif key == "capture":
             self._try_capture()
 
         elif key == "switch":
-            self.message = "Il cambio Pokémon sarà il prossimo step."
+            slots = self._get_switchable_slots()
+            if not slots:
+                self.message = "Nessun altro Pokémon disponibile per il cambio."
+            else:
+                self.awaiting_switch = True
+                self.message = f"Scegli uno slot con i tasti {', '.join(str(s) for s in slots)}."
 
     def update(self, dt: float) -> None:
         pass
@@ -282,6 +313,9 @@ class BattleScene:
             y += 36
 
         msg = self.font_text.render(self.message, True, (30, 30, 30))
+        if self.awaiting_switch:
+            switch_msg = self.small_font.render("Cambio attivo: premi 1-6 per scegliere lo slot.", True, (30, 30, 30))
+            self.screen.blit(switch_msg, (60, 465))
         self.screen.blit(msg, (60, 430))
 
         labels = self._get_player_move_labels()
@@ -301,3 +335,36 @@ class BattleScene:
         elif self.battle_state.get("battle_result") == "captured":
             cap_msg = self.font_text.render("Pokémon catturato. Clicca un pulsante per tornare al percorso.", True, (20, 120, 20))
             self.screen.blit(cap_msg, (60, 470))
+
+    def _sync_instances_after_turn(self) -> None:
+        sync_active_instance_from_battle(self.battle_state, self.instances)
+        save_pokemon_instances(self.instances, SLOT_1_DIR)
+
+
+    def _get_switchable_slots(self) -> list[int]:
+        side_a = self.battle_state.get("side_a", {})
+        player_id = side_a.get("player_id")
+        active_slot = side_a.get("party_slot")
+
+        if player_id is None:
+            return []
+
+        party = get_player_party(self.instances, int(player_id))
+        slots = []
+
+        for row in party:
+            try:
+                slot = int(row.get("slot", -1))
+                hp_current = int(row.get("hp_current", 0))
+                is_fainted = str(row.get("is_fainted", "0")).strip().lower() in {"1", "true"}
+            except (TypeError, ValueError):
+                continue
+
+            if slot == int(active_slot):
+                continue
+            if is_fainted or hp_current <= 0:
+                continue
+
+            slots.append(slot)
+
+        return slots
