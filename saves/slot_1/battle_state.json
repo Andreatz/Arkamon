@@ -3,9 +3,9 @@
   "return_node": "route_1",
   "turn": "A",
   "side_a": {
-    "player_id": 1,
-    "trainer_name": "Giocatore 1",
-    "active_instance_id": 1,
+    "player_id": 2,
+    "trainer_name": "Giocatore 2",
+    "active_instance_id": 2,
     "current_hp": 18,
     "status": null,
     "status_turns": 0,
@@ -30,8 +30,8 @@
   "encounter_meta": {
     "route_node_id": "route_1",
     "area_id": "Percorso_1",
-    "bush_id": "b3",
-    "encounter_group": "C"
+    "bush_id": "b4",
+    "encounter_group": "D"
   },
   "pending_evolution": {
     "enabled": false,
