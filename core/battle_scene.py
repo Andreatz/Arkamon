@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import pygame
 
-from paths import SLOT_1_DIR
+from paths import SLOT_1_DIR, BACK_SPRITES_DIR, FRONT_SPRITES_DIR
 from save_manager import (
     load_battle_state,
     load_pokemon_instances,
@@ -294,6 +294,22 @@ class BattleScene:
         pygame.draw.rect(self.screen, (120, 180, 120), (0, 350, 1280, 370))
 
         title = self.font_title.render("Battaglia", True, (25, 25, 25))
+        player_sprite, wild_sprite = self._get_battle_sprites()
+
+        if player_sprite:
+            self.screen.blit(player_sprite, (140, 220))
+        else:
+            pygame.draw.rect(self.screen, (180, 180, 180), (140, 220, 220, 220))
+            txt = self.small_font.render("Back sprite mancante", True, (20, 20, 20))
+            self.screen.blit(txt, (155, 320))
+
+        if wild_sprite:
+            self.screen.blit(wild_sprite, (880, 120))
+        else:
+            pygame.draw.rect(self.screen, (180, 180, 180), (880, 120, 220, 220))
+            txt = self.small_font.render("Front sprite mancante", True, (20, 20, 20))
+            self.screen.blit(txt, (895, 220))
+
         self.screen.blit(title, (40, 30))
 
         side_a = self.battle_state.get("side_a", {})
@@ -379,3 +395,42 @@ class BattleScene:
             slots.append(slot)
 
         return slots
+    
+    def _load_sprite(self, folder, species_id: int, size: tuple[int, int]):
+        candidates = [
+            folder / f"{species_id}.png",
+            folder / f"{species_id:03}.png",
+            folder / f"{species_id}.jpg",
+            folder / f"{species_id:03}.jpg",
+        ]
+
+        for path in candidates:
+            if path.exists():
+                image = pygame.image.load(str(path)).convert_alpha()
+                return pygame.transform.smoothscale(image, size)
+
+        return None
+
+
+    def _get_battle_sprites(self):
+        player_sprite = None
+        wild_sprite = None
+
+        player_instance = self._get_active_player_instance()
+        if player_instance:
+            player_sprite = self._load_sprite(
+                BACK_SPRITES_DIR,
+                int(player_instance["species_id"]),
+                (220, 220),
+            )
+
+        side_b = self.battle_state.get("side_b", {})
+        wild_species_id = side_b.get("wild_species_id")
+        if wild_species_id is not None:
+            wild_sprite = self._load_sprite(
+                FRONT_SPRITES_DIR,
+                int(wild_species_id),
+                (220, 220),
+            )
+
+        return player_sprite, wild_sprite
