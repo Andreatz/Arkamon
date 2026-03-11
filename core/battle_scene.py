@@ -64,30 +64,30 @@ class BattleScene:
 
         self.ui_text_box = self._load_scaled_image(
             UI_DIR / "infobox.png",
-            self._scale_size(640, 250),
+            self._scale_size(760, 200),
             alpha=True,
         )
 
         self.ui_hp_enemy = self._load_scaled_image(
             UI_DIR / "hp_bar_enemy.png",
-            self._scale_size(1020, 120),
+            self._scale_size(580, 110),
             alpha=True,
         )
 
         self.ui_hp_player = self._load_scaled_image(
             UI_DIR / "hp_bar_player.png",
-            self._scale_size(630, 120),
+            self._scale_size(580, 110),
             alpha=True,
         )
 
         self.ui_move_panel = self._load_optional_ui(
             ["move_button.png"],
-            self._scale_size(300, 180),
+            self._scale_size(320, 110),
         )
 
         self.ui_action_panel = self._load_optional_ui(
-            ["action_button.png", "small_button.png", "menu_button.png"],
-            self._scale_size(230, 92),
+            ["general_button.png", "move_button.png"],
+            self._scale_size(320, 90),
         )
 
         self.buttons = self._build_buttons()
@@ -120,11 +120,11 @@ class BattleScene:
 
     def _build_buttons(self) -> dict[str, pygame.Rect]:
         return {
-            "move_1": self._vr(860, 835, 300, 180),
-            "move_2": self._vr(1185, 835, 300, 180),
-            "move_3": self._vr(1510, 835, 300, 180),
-            "capture": self._vr(65, 835, 230, 92),
-            "switch": self._vr(65, 935, 230, 92),
+            "move_1": self,
+            "move_2": self,
+            "move_3": self,
+            "capture": self,
+            "switch": self
         }
 
     def _wrap_text(self, text: str, max_chars: int = 34) -> list[str]:
@@ -568,9 +568,10 @@ class BattleScene:
 
         self._draw_hp_fill(
             player_fill_rect,
-            int(side_a.get("current_hp", 0)),
-            int(side_a.get("current_hp", 1)),
+            player_hp_current,
+            max(1, player_hp_max),
         )
+
 
         enemy_name = side_b.get("wild_species_name", side_b.get("trainer_name", "---"))
         enemy_level = side_b.get("level", "---")
