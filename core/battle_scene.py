@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import random
-import pygame
 from pathlib import Path
 
-from paths import SLOT_1_DIR, BACK_SPRITES_DIR, FRONT_SPRITES_DIR, BACKGROUND_DIR, UI_DIR
+import pygame
+
+from paths import (
+    SLOT_1_DIR,
+    BACK_SPRITES_DIR,
+    FRONT_SPRITES_DIR,
+    BACKGROUND_DIR,
+    UI_DIR,
+)
 from save_manager import (
     load_battle_state,
     load_pokemon_instances,
@@ -27,31 +34,141 @@ from battle_service import (
 
 
 class BattleScene:
+    VIRTUAL_W = 1920
+    VIRTUAL_H = 1080
+
     def __init__(self, game):
         self.game = game
         self.screen = game.screen
-        self.font_title = game.font_title
-        self.font_text = game.font_text
-        self.small_font = pygame.font.SysFont("arial", 20)
+
+        self.screen_w, self.screen_h = self.screen.get_size()
+        self.sx = self.screen_w / self.VIRTUAL_W
+        self.sy = self.screen_h / self.VIRTUAL_H
+
+        self.font_title = pygame.font.SysFont("arial", max(24, int(42 * self.sy)), bold=True)
+        self.font_name = pygame.font.SysFont("arial", max(20, int(28 * self.sy)), bold=True)
+        self.font_text = pygame.font.SysFont("arial", max(18, int(24 * self.sy)), bold=True)
+        self.font_small = pygame.font.SysFont("arial", max(15, int(19 * self.sy)))
+        self.font_small_bold = pygame.font.SysFont("arial", max(15, int(19 * self.sy)), bold=True)
+
         self.awaiting_switch = False
 
         self.battle_state = load_battle_state(SLOT_1_DIR)
         self.instances = load_pokemon_instances(SLOT_1_DIR)
 
-        self.bg_forest = pygame.image.load(str(BACKGROUND_DIR / "battle_forest.png")).convert()
-        self.ui_text_box = pygame.image.load(str(UI_DIR / "infobox.png")).convert_alpha()
-        self.ui_hp_enemy = pygame.image.load(str(UI_DIR / "hp_bar_enemy.png")).convert_alpha()
-        self.ui_hp_player = pygame.image.load(str(UI_DIR / "hp_bar_player.png")).convert_alpha()
+        self.bg_forest = self._load_scaled_image(
+            BACKGROUND_DIR / "battle_forest.jpg",
+            (self.screen_w, self.screen_h),
+            alpha=False,
+        )
 
-        self.buttons = {
-            "move_1": pygame.Rect(60, 520, 240, 60),
-            "move_2": pygame.Rect(320, 520, 240, 60),
-            "move_3": pygame.Rect(580, 520, 240, 60),
-            "capture": pygame.Rect(860, 520, 160, 60),
-            "switch": pygame.Rect(1040, 520, 160, 60),
+        self.ui_text_box = self._load_scaled_image(
+            UI_DIR / "infobox.png",
+            self._scale_size(640, 250),
+            alpha=True,
+        )
+
+        self.ui_hp_enemy = self._load_scaled_image(
+            UI_DIR / "hp_bar_enemy.png",
+            self._scale_size(1020, 120),
+            alpha=True,
+        )
+
+        self.ui_hp_player = self._load_scaled_image(
+            UI_DIR / "hp_bar_player.png",
+            self._scale_size(630, 120),
+            alpha=True,
+        )
+
+        self.ui_move_panel = self._load_optional_ui(
+            ["move_button.png"],
+            self._scale_size(300, 180),
+        )
+
+        self.ui_action_panel = self._load_optional_ui(
+            ["action_button.png", "small_button.png", "menu_button.png"],
+            self._scale_size(230, 92),
+        )
+
+        self.buttons = self._build_buttons()
+        self.message = self._build_intro_message()
+
+    # ---------- basic helpers ----------
+
+    def _vr(self, x: int, y: int, w: int, h: int) -> pygame.Rect:
+        return pygame.Rect(
+            int(x * self.sx),
+            int(y * self.sy),
+            max(1, int(w * self.sx)),
+            max(1, int(h * self.sy)),
+        )
+
+    def _scale_size(self, w: int, h: int) -> tuple[int, int]:
+        return max(1, int(w * self.sx)), max(1, int(h * self.sy))
+
+    def _load_scaled_image(self, path: Path, size: tuple[int, int], alpha: bool = True):
+        image = pygame.image.load(str(path))
+        image = image.convert_alpha() if alpha else image.convert()
+        return pygame.transform.smoothscale(image, size)
+
+    def _load_optional_ui(self, filenames: list[str], size: tuple[int, int]):
+        for name in filenames:
+            path = UI_DIR / name
+            if path.exists():
+                return self._load_scaled_image(path, size, alpha=True)
+        return None
+
+    def _build_buttons(self) -> dict[str, pygame.Rect]:
+        return {
+            "move_1": self._vr(860, 835, 300, 180),
+            "move_2": self._vr(1185, 835, 300, 180),
+            "move_3": self._vr(1510, 835, 300, 180),
+            "capture": self._vr(65, 835, 230, 92),
+            "switch": self._vr(65, 935, 230, 92),
         }
 
-        self.message = self._build_intro_message()
+    def _wrap_text(self, text: str, max_chars: int = 34) -> list[str]:
+        words = text.split()
+        if not words:
+            return [""]
+
+        lines = []
+        current = words[0]
+
+        for word in words[1:]:
+            if len(current) + 1 + len(word) <= max_chars:
+                current += " " + word
+            else:
+                lines.append(current)
+                current = word
+
+        lines.append(current)
+        return lines
+
+    def _draw_fallback_panel(self, rect: pygame.Rect, border_color=(60, 60, 60)):
+        panel = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+        pygame.draw.rect(panel, (235, 235, 235, 205), panel.get_rect(), border_radius=18)
+        pygame.draw.rect(panel, border_color, panel.get_rect(), 4, border_radius=18)
+        self.screen.blit(panel, rect.topleft)
+
+    def _draw_hp_fill(self, rect: pygame.Rect, current_hp: int, hp_max: int):
+        ratio = 0 if hp_max <= 0 else max(0.0, min(1.0, current_hp / hp_max))
+
+        if ratio > 0.5:
+            color = (81, 224, 86)
+        elif ratio > 0.2:
+            color = (238, 204, 64)
+        else:
+            color = (221, 78, 78)
+
+        bg = pygame.Rect(rect.x, rect.y, rect.width, rect.height)
+        pygame.draw.rect(self.screen, (220, 220, 220), bg, border_radius=max(4, rect.height // 2))
+
+        if ratio > 0:
+            fill = pygame.Rect(rect.x, rect.y, max(4, int(rect.width * ratio)), rect.height)
+            pygame.draw.rect(self.screen, color, fill, border_radius=max(4, rect.height // 2))
+
+    # ---------- battle data ----------
 
     def _build_intro_message(self) -> str:
         if not self.battle_state:
@@ -96,6 +213,18 @@ class BattleScene:
 
         return labels
 
+    def _get_available_move_keys(self) -> list[str]:
+        player_instance = self._get_active_player_instance()
+        if not player_instance:
+            return ["move_1"]
+
+        species = get_species(self.game.data, player_instance["species_id"])
+        if not species:
+            return ["move_1"]
+
+        move_ids = get_move_ids_for_species(species)
+        return [f"move_{idx}" for idx in range(1, len(move_ids[:3]) + 1)] or ["move_1"]
+
     def _get_player_party(self, player_id: int) -> list[dict]:
         party = []
         for row in self.instances:
@@ -133,6 +262,8 @@ class BattleScene:
 
         box_rows.sort(key=lambda r: int(r.get("slot", 999)))
         return box_rows
+
+    # ---------- navigation / results ----------
 
     def _return_after_battle(self) -> None:
         side_a = self.battle_state.get("side_a", {})
@@ -188,7 +319,6 @@ class BattleScene:
             return
 
         catch_rate = int(getattr(species, "catch_rate", 0) or 0)
-
         hp_factor = 1.0 - (current_hp / max(1, hp_max))
         chance = 0.20 + hp_factor * 0.50 + min(catch_rate, 100) / 500.0
         chance = max(0.05, min(0.95, chance))
@@ -224,6 +354,7 @@ class BattleScene:
         )
 
         save_pokemon_instances(self.instances, SLOT_1_DIR)
+
         self.battle_state["battle_result"] = "captured"
         self.battle_state["capture_allowed"] = False
         save_battle_state(self.battle_state, SLOT_1_DIR)
@@ -233,147 +364,11 @@ class BattleScene:
         else:
             self.message = f"{species.name} catturato e inviato al box!"
 
-    def handle_event(self, event) -> None:
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                self._return_after_battle()
-                return
-
-            if self.awaiting_switch:
-                key_to_slot = {
-                    pygame.K_1: 1,
-                    pygame.K_2: 2,
-                    pygame.K_3: 3,
-                    pygame.K_4: 4,
-                    pygame.K_5: 5,
-                    pygame.K_6: 6,
-                }
-                if event.key in key_to_slot:
-                    slot = key_to_slot[event.key]
-                    self.battle_state, self.message = switch_player_pokemon(
-                        self.battle_state,
-                        self.instances,
-                        slot,
-                    )
-                    self.awaiting_switch = False
-                    save_battle_state(self.battle_state, SLOT_1_DIR)
-                    return
-
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            for key, rect in self.buttons.items():
-                if rect.collidepoint(event.pos):
-                    self._handle_button(key)
-                    break
-
-    def _handle_button(self, key: str) -> None:
-        if self.battle_state.get("battle_result") in {"player_win", "wild_win", "captured"}:
-            self._return_after_battle()
-            return
-
-        if key.startswith("move_"):
-            move_index = int(key.split("_")[1]) - 1
-            self.battle_state, self.message = resolve_player_attack(
-                self.game.data,
-                self.battle_state,
-                self.instances,
-                move_index,
-            )
-            self._sync_instances_after_turn()
-            save_battle_state(self.battle_state, SLOT_1_DIR)
-
-        elif key == "capture":
-            self._try_capture()
-
-        elif key == "switch":
-            slots = self._get_switchable_slots()
-            if not slots:
-                self.message = "Nessun altro Pokémon disponibile per il cambio."
-            else:
-                self.awaiting_switch = True
-                self.message = f"Scegli uno slot con i tasti {', '.join(str(s) for s in slots)}."
-
-    def update(self, dt: float) -> None:
-        pass
-
-    def draw(self) -> None:
-        self.screen.blit(self.bg_forest, (0, 0))
-
-        title = self.font_title.render("Battaglia", True, (25, 25, 25))
-        player_sprite, wild_sprite = self._get_battle_sprites()
-
-        if player_sprite:
-            # come nei tuoi mockup: back sprite a sinistra in basso
-            self.screen.blit(player_sprite, (140, 260))
-
-        if wild_sprite:
-            # front sprite a destra in alto
-            self.screen.blit(wild_sprite, (880, 140))
-
-            self.screen.blit(title, (40, 30))
-
-        # barra HP nemico (in alto)
-        self.screen.blit(self.ui_hp_enemy, (340, 40))
-        # barra HP giocatore (in basso)
-        self.screen.blit(self.ui_hp_player, (340, 340))
-
-        # pannello testo
-        self.screen.blit(self.ui_text_box, (260, 380))
-
-        side_a = self.battle_state.get("side_a", {})
-        side_b = self.battle_state.get("side_b", {})
-
-        a_text = [
-            f"Giocatore: {side_a.get('trainer_name', '---')}",
-            f"Instance ID: {side_a.get('active_instance_id', '---')}",
-            f"HP correnti: {side_a.get('current_hp', '---')}",
-        ]
-
-        b_text = [
-            f"Avversario: {side_b.get('wild_species_name', side_b.get('trainer_name', '---'))}",
-            f"Livello: {side_b.get('level', '---')}",
-            f"HP: {side_b.get('current_hp', '---')} / {side_b.get('hp_max', '---')}",
-        ]
-
-        y = 110
-        for line in a_text:
-            surf = self.font_text.render(str(line), True, (30, 30, 30))
-            self.screen.blit(surf, (60, y))
-            y += 36
-
-        y = 110
-        for line in b_text:
-            surf = self.font_text.render(str(line), True, (30, 30, 30))
-            self.screen.blit(surf, (760, y))
-            y += 36
-
-        msg = self.font_text.render(self.message, True, (30, 30, 30))
-        if self.awaiting_switch:
-            switch_msg = self.small_font.render("Cambio attivo: premi 1-6 per scegliere lo slot.", True, (30, 30, 30))
-            self.screen.blit(switch_msg, (60, 465))
-        self.screen.blit(msg, (60, 430))
-
-        labels = self._get_player_move_labels()
-
-        for key, rect in self.buttons.items():
-            pygame.draw.rect(self.screen, (245, 245, 245), rect, border_radius=10)
-            pygame.draw.rect(self.screen, (40, 40, 40), rect, 3, border_radius=10)
-            surf = self.small_font.render(labels[key], True, (20, 20, 20))
-            self.screen.blit(surf, (rect.x + 18, rect.y + 18))
-
-        if self.battle_state.get("battle_result") == "player_win":
-            win_msg = self.font_text.render("Hai vinto. Clicca un pulsante per tornare al percorso.", True, (20, 120, 20))
-            self.screen.blit(win_msg, (60, 470))
-        elif self.battle_state.get("battle_result") == "wild_win":
-            lose_msg = self.font_text.render("Hai perso. Clicca un pulsante per uscire.", True, (160, 40, 40))
-            self.screen.blit(lose_msg, (60, 470))
-        elif self.battle_state.get("battle_result") == "captured":
-            cap_msg = self.font_text.render("Pokémon catturato. Clicca un pulsante per tornare al percorso.", True, (20, 120, 20))
-            self.screen.blit(cap_msg, (60, 470))
+    # ---------- switching ----------
 
     def _sync_instances_after_turn(self) -> None:
         sync_active_instance_from_battle(self.battle_state, self.instances)
         save_pokemon_instances(self.instances, SLOT_1_DIR)
-
 
     def _get_switchable_slots(self) -> list[int]:
         side_a = self.battle_state.get("side_a", {})
@@ -402,8 +397,10 @@ class BattleScene:
             slots.append(slot)
 
         return slots
-    
-    def _load_sprite(self, folder, species_id: int, size: tuple[int, int]):
+
+    # ---------- sprites ----------
+
+    def _load_sprite(self, folder: Path, species_id: int, size: tuple[int, int]):
         candidates = [
             folder / f"{species_id}.png",
             folder / f"{species_id:03}.png",
@@ -418,7 +415,6 @@ class BattleScene:
 
         return None
 
-
     def _get_battle_sprites(self):
         player_sprite = None
         wild_sprite = None
@@ -428,7 +424,7 @@ class BattleScene:
             player_sprite = self._load_sprite(
                 BACK_SPRITES_DIR,
                 int(player_instance["species_id"]),
-                (220, 220),
+                self._scale_size(430, 430),
             )
 
         side_b = self.battle_state.get("side_b", {})
@@ -437,41 +433,224 @@ class BattleScene:
             wild_sprite = self._load_sprite(
                 FRONT_SPRITES_DIR,
                 int(wild_species_id),
-                (220, 220),
+                self._scale_size(320, 320),
             )
 
         return player_sprite, wild_sprite
-    
-    def _load_sprite(self, folder: Path, species_id: int, size: tuple[int, int]):
-        candidates = [
-            folder / f"{species_id}.png",
-            folder / f"{species_id:03}.png",
-        ]
-        for path in candidates:
-            if path.exists():
-                img = pygame.image.load(str(path)).convert_alpha()
-                return pygame.transform.smoothscale(img, size)
-        return None
 
-    def _get_battle_sprites(self):
-        player_sprite = None
-        wild_sprite = None
+    # ---------- events ----------
+
+    def handle_event(self, event) -> None:
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                self._return_after_battle()
+                return
+
+            if self.awaiting_switch:
+                key_to_slot = {
+                    pygame.K_1: 1,
+                    pygame.K_2: 2,
+                    pygame.K_3: 3,
+                    pygame.K_4: 4,
+                    pygame.K_5: 5,
+                    pygame.K_6: 6,
+                }
+
+                if event.key in key_to_slot:
+                    slot = key_to_slot[event.key]
+                    self.battle_state, self.message = switch_player_pokemon(
+                        self.battle_state,
+                        self.instances,
+                        slot,
+                    )
+                    self.awaiting_switch = False
+                    save_battle_state(self.battle_state, SLOT_1_DIR)
+                    return
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for key, rect in self.buttons.items():
+                if rect.collidepoint(event.pos):
+                    self._handle_button(key)
+                    break
+
+    def _handle_button(self, key: str) -> None:
+        if self.battle_state.get("battle_result") in {"player_win", "wild_win", "captured"}:
+            self._return_after_battle()
+            return
+
+        if key.startswith("move_"):
+            available_keys = self._get_available_move_keys()
+            if key not in available_keys:
+                return
+
+            move_index = int(key.split("_")[1]) - 1
+            self.battle_state, self.message = resolve_player_attack(
+                self.game.data,
+                self.battle_state,
+                self.instances,
+                move_index,
+            )
+            self._sync_instances_after_turn()
+            save_battle_state(self.battle_state, SLOT_1_DIR)
+
+        elif key == "capture":
+            self._try_capture()
+
+        elif key == "switch":
+            slots = self._get_switchable_slots()
+            if not slots:
+                self.message = "Nessun altro Pokémon disponibile per il cambio."
+            else:
+                self.awaiting_switch = True
+                self.message = f"Scegli uno slot con i tasti {', '.join(str(s) for s in slots)}."
+
+    def update(self, dt: float) -> None:
+        pass
+
+    # ---------- drawing ----------
+
+    def _draw_action_button(self, key: str, label: str):
+        rect = self.buttons[key]
+
+        if self.ui_action_panel:
+            panel = pygame.transform.smoothscale(self.ui_action_panel, (rect.width, rect.height))
+            self.screen.blit(panel, rect.topleft)
+        else:
+            self._draw_fallback_panel(rect)
+
+        txt = self.font_text.render(label, True, (25, 25, 25))
+        txt_rect = txt.get_rect(center=rect.center)
+        self.screen.blit(txt, txt_rect)
+
+    def _draw_move_button(self, key: str, label: str):
+        rect = self.buttons[key]
+
+        if self.ui_move_panel:
+            panel = pygame.transform.smoothscale(self.ui_move_panel, (rect.width, rect.height))
+            self.screen.blit(panel, rect.topleft)
+        else:
+            self._draw_fallback_panel(rect)
+
+        title = self.font_text.render(label, True, (25, 25, 25))
+        title_rect = title.get_rect(center=(rect.centerx, rect.y + int(rect.height * 0.36)))
+        self.screen.blit(title, title_rect)
+
+    def draw(self) -> None:
+        self.screen.blit(self.bg_forest, (0, 0))
+
+        side_a = self.battle_state.get("side_a", {})
+        side_b = self.battle_state.get("side_b", {})
+
+        player_sprite, wild_sprite = self._get_battle_sprites()
+
+        if player_sprite:
+            self.screen.blit(player_sprite, self._vr(130, 520, 430, 430).topleft)
+
+        if wild_sprite:
+            self.screen.blit(wild_sprite, self._vr(1430, 250, 320, 320).topleft)
+
+        enemy_bar_rect = self._vr(430, 55, 1020, 120)
+        player_bar_rect = self._vr(1080, 740, 630, 120)
+        text_box_rect = self._vr(660, 430, 640, 250)
+
+        self.screen.blit(self.ui_hp_enemy, enemy_bar_rect.topleft)
+        self.screen.blit(self.ui_hp_player, player_bar_rect.topleft)
+        self.screen.blit(self.ui_text_box, text_box_rect.topleft)
+
+        enemy_fill_rect = self._vr(560, 126, 485, 28)
+        player_fill_rect = self._vr(1110, 815, 445, 26)
+
+        self._draw_hp_fill(
+            enemy_fill_rect,
+            int(side_b.get("current_hp", 0)),
+            int(side_b.get("hp_max", 1)),
+        )
+
+        self._draw_hp_fill(
+            player_fill_rect,
+            int(side_a.get("current_hp", 0)),
+            int(side_a.get("current_hp", 1)),
+        )
+
+        enemy_name = side_b.get("wild_species_name", side_b.get("trainer_name", "---"))
+        enemy_level = side_b.get("level", "---")
 
         player_instance = self._get_active_player_instance()
+        player_species_name = "---"
+        player_level = "---"
+        player_hp_current = int(side_a.get("current_hp", 0))
+        player_hp_max = player_hp_current
+
         if player_instance:
-            player_sprite = self._load_sprite(
-                BACK_SPRITES_DIR,
-                int(player_instance["species_id"]),
-                (260, 260),
-            )
+            player_species = self.game.data.species.get(int(player_instance["species_id"]))
+            if player_species:
+                player_species_name = player_species.name
+            player_level = player_instance.get("level", "---")
+            try:
+                player_hp_max = int(player_instance.get("hp_max", player_hp_current))
+            except (TypeError, ValueError):
+                player_hp_max = player_hp_current
 
-        side_b = self.battle_state.get("side_b", {})
-        wild_species_id = side_b.get("wild_species_id")
-        if wild_species_id is not None:
-            wild_sprite = self._load_sprite(
-                FRONT_SPRITES_DIR,
-                int(wild_species_id),
-                (260, 260),
-            )
+        enemy_name_surf = self.font_name.render(str(enemy_name), True, (255, 255, 255))
+        enemy_lvl_surf = self.font_name.render(f"LV. {enemy_level}", True, (255, 255, 255))
+        player_name_surf = self.font_name.render(str(player_species_name), True, (255, 255, 255))
+        player_lvl_surf = self.font_name.render(f"LV. {player_level}", True, (255, 255, 255))
+        player_hp_surf = self.font_small_bold.render(
+            f"{player_hp_current}/{player_hp_max}",
+            True,
+            (20, 20, 20),
+        )
 
-        return player_sprite, wild_sprite
+        self.screen.blit(enemy_name_surf, self._vr(625, 64, 0, 0).topleft)
+        self.screen.blit(enemy_lvl_surf, self._vr(1270, 64, 0, 0).topleft)
+        self.screen.blit(player_name_surf, self._vr(1220, 748, 0, 0).topleft)
+        self.screen.blit(player_lvl_surf, self._vr(1560, 748, 0, 0).topleft)
+        self.screen.blit(player_hp_surf, self._vr(1120, 813, 0, 0).topleft)
+
+        message_lines = self._wrap_text(self.message, max_chars=34)
+        text_y = text_box_rect.y + int(62 * self.sy)
+
+        for line in message_lines[:4]:
+            surf = self.font_text.render(line, True, (30, 30, 30))
+            self.screen.blit(surf, (text_box_rect.x + int(70 * self.sx), text_y))
+            text_y += int(42 * self.sy)
+
+        if self.awaiting_switch:
+            switch_surf = self.font_small_bold.render(
+                "Cambio attivo: premi 1-6 per scegliere.",
+                True,
+                (170, 110, 20),
+            )
+            self.screen.blit(switch_surf, (text_box_rect.x + int(70 * self.sx), text_box_rect.y + int(190 * self.sy)))
+
+        labels = self._get_player_move_labels()
+        move_keys = self._get_available_move_keys()
+
+        for move_key in move_keys:
+            self._draw_move_button(move_key, labels[move_key])
+
+        self._draw_action_button("capture", "Cattura")
+        self._draw_action_button("switch", "Cambia")
+
+        result = self.battle_state.get("battle_result")
+        if result == "player_win":
+            result_surf = self.font_small_bold.render(
+                "Hai vinto. Clicca un pulsante per tornare al percorso.",
+                True,
+                (20, 120, 20),
+            )
+            self.screen.blit(result_surf, self._vr(705, 650, 0, 0).topleft)
+        elif result == "wild_win":
+            result_surf = self.font_small_bold.render(
+                "Hai perso. Clicca un pulsante per uscire.",
+                True,
+                (170, 40, 40),
+            )
+            self.screen.blit(result_surf, self._vr(760, 650, 0, 0).topleft)
+        elif result == "captured":
+            result_surf = self.font_small_bold.render(
+                "Pokémon catturato. Clicca un pulsante per tornare al percorso.",
+                True,
+                (20, 120, 20),
+            )
+            self.screen.blit(result_surf, self._vr(650, 650, 0, 0).topleft)
