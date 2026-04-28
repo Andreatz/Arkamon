@@ -9,8 +9,111 @@ import type {
   MossaDef,
   RisultatoMossa,
   Lato,
+  StatoAlterato,
 } from '@/types'
 import { getPokemon, getMossa, efficaciaTipo, CRESCITA_HP } from '@data/index'
+
+// =============================================================
+// STATI ALTERATI (Fase B della roadmap)
+// =============================================================
+
+/** Durata iniziale (turni) per ciascuno stato. -1 = indefinita. */
+export const DURATA_STATO: Record<StatoAlterato, number> = {
+  Confuso: 2,
+  Addormentato: 3,
+  Avvelenato: -1,
+}
+
+/**
+ * Mappa effetto di mossa → stato applicato.
+ * Le chiavi corrispondono a `MossaDef.effetto` (campo già presente).
+ */
+const EFFETTO_TO_STATO: Record<string, StatoAlterato> = {
+  CONFUSIONE: 'Confuso',
+  SONNO: 'Addormentato',
+  VELENO: 'Avvelenato',
+}
+
+/** Applica uno stato a un'istanza (sovrascrive eventuale stato precedente). */
+export function applicaStato(
+  istanza: PokemonIstanza,
+  tipo: StatoAlterato
+): PokemonIstanza {
+  return {
+    ...istanza,
+    stato: { tipo, turniRimanenti: DURATA_STATO[tipo] },
+  }
+}
+
+/**
+ * Risolve lo stato all'inizio del turno del pokemon.
+ *
+ * - Avvelenato: subisce 10% dell'hpMax come danno, lo stato persiste.
+ * - Addormentato: 50% probabilità di svegliarsi (clear). Altrimenti
+ *   turno saltato e turniRimanenti -= 1; al raggiungimento di 0 si
+ *   sveglia comunque al prossimo turno.
+ * - Confuso: 50% probabilità di colpirsi da solo (1d6 danno + turno
+ *   perso). Altrimenti agisce normalmente. turniRimanenti -= 1 in
+ *   entrambi i casi; al raggiungimento di 0 lo stato si pulisce.
+ */
+export function risolviStatoInizioTurno(
+  istanza: PokemonIstanza,
+  hpMax: number,
+  rng: () => number = Math.random
+): {
+  istanza: PokemonIstanza
+  puoAgire: boolean
+  dannoSubito: number
+  messaggi: string[]
+} {
+  if (!istanza.stato) {
+    return { istanza, puoAgire: true, dannoSubito: 0, messaggi: [] }
+  }
+
+  const messaggi: string[] = []
+  let stato: PokemonIstanza['stato'] = istanza.stato
+  let hp = istanza.hp
+  let dannoSubito = 0
+  let puoAgire = true
+
+  if (stato.tipo === 'Avvelenato') {
+    dannoSubito = Math.max(1, Math.floor(hpMax * 0.1))
+    hp = Math.max(0, hp - dannoSubito)
+    messaggi.push(`${istanza.nome} subisce ${dannoSubito} danni dal veleno.`)
+    // Veleno indefinito: nessun decremento
+  } else if (stato.tipo === 'Addormentato') {
+    if (rng() < 0.5) {
+      messaggi.push(`${istanza.nome} si è svegliato!`)
+      stato = undefined
+    } else {
+      messaggi.push(`${istanza.nome} sta dormendo profondamente...`)
+      puoAgire = false
+      const tr = stato.turniRimanenti - 1
+      stato = tr > 0 ? { ...stato, turniRimanenti: tr } : undefined
+    }
+  } else if (stato.tipo === 'Confuso') {
+    const tr = stato.turniRimanenti - 1
+    if (rng() < 0.5) {
+      dannoSubito = rollD6(1, rng)
+      hp = Math.max(0, hp - dannoSubito)
+      messaggi.push(
+        `${istanza.nome} è confuso e si è colpito da solo! (${dannoSubito} danni)`
+      )
+      puoAgire = false
+    } else {
+      messaggi.push(`${istanza.nome} è confuso ma riesce ad agire.`)
+    }
+    stato = tr > 0 ? { ...stato, turniRimanenti: tr } : undefined
+    if (!stato) messaggi.push(`${istanza.nome} non è più confuso.`)
+  }
+
+  return {
+    istanza: { ...istanza, hp, stato },
+    puoAgire,
+    dannoSubito,
+    messaggi,
+  }
+}
 
 // =============================================================
 // COSTANTI DI BILANCIAMENTO
@@ -112,6 +215,23 @@ export function calcolaDanno(
   const difensoreSvenuto = difensore.hp - dannoFinale <= 0
   if (difensoreSvenuto) messaggi.push(`${difensore.nome} non può più combattere!`)
 
+  // Trigger stato alterato (solo se la mossa ha un effetto mappato e il
+  // difensore non è già afflitto e non è KO).
+  let statoApplicato: StatoAlterato | undefined
+  if (
+    mossa.effetto &&
+    EFFETTO_TO_STATO[mossa.effetto] &&
+    !difensore.stato &&
+    !difensoreSvenuto
+  ) {
+    const stato = EFFETTO_TO_STATO[mossa.effetto]
+    const chance = mossa.valoreEffetto ?? 100
+    if (rng() * 100 < chance) {
+      statoApplicato = stato
+      messaggi.push(`${difensore.nome} è ora ${stato}!`)
+    }
+  }
+
   return {
     attaccante,
     difensore,
@@ -125,6 +245,7 @@ export function calcolaDanno(
     dannoFinale,
     difensoreSvenuto,
     messaggi,
+    statoApplicato,
   }
 }
 

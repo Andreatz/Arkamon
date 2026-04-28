@@ -290,12 +290,14 @@ export const useGameStore = create<GameState>()(
       terminaBattaglia: (curaCompleta) =>
         set((s) => {
           if (!curaCompleta) return { battaglia: null }
-          // Cura tutti i pokemon di entrambi i giocatori (come VBA: PostBattaglia)
+          // Cura HP a max e pulisce eventuali stati alterati (porting di
+          // Mod_Battle_Engine.PulisciStato + post-battaglia VBA).
           const curaSquadra = (squadra: PokemonIstanza[]) =>
             squadra.map((p) => {
               const specie = getPokemon(p.specieId)
               if (!specie) return p
-              return { ...p, hp: calcolaHPMax(p) }
+              const { stato: _stato, ...senzaStato } = p
+              return { ...senzaStato, hp: calcolaHPMax(senzaStato) }
             })
           return {
             battaglia: null,

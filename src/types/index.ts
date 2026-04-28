@@ -28,6 +28,15 @@ export type TipoBattaglia = 'Selvatico' | 'NPC' | 'PVP'
 
 export type Lato = 'A' | 'B'
 
+/** Stati alterati di un pokemon in battaglia (porting roadmap Fase B). */
+export type StatoAlterato = 'Confuso' | 'Addormentato' | 'Avvelenato'
+
+/** Stato attivo su un pokemon. turniRimanenti = -1 → indefinito (es. veleno). */
+export interface Stato {
+  tipo: StatoAlterato
+  turniRimanenti: number
+}
+
 // =============================================================
 // DATI STATICI (JSON)
 // =============================================================
@@ -113,6 +122,8 @@ export interface PokemonIstanza {
   hp: number
   /** XP guadagnati al livello attuale */
   xp: number
+  /** Stato alterato attivo (se presente). Pulito a fine battaglia. */
+  stato?: Stato
 }
 
 /** Stato di un singolo giocatore */
@@ -166,6 +177,8 @@ export interface RisultatoMossa {
   dannoFinale: number
   difensoreSvenuto: boolean
   messaggi: string[]
+  /** Stato alterato innescato sul difensore (se la mossa ha effetto e il roll è passato) */
+  statoApplicato?: StatoAlterato
 }
 
 // =============================================================

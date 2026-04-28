@@ -8,9 +8,17 @@ import {
   tentaCattura,
   applicaXP,
   xpGuadagnato,
+  applicaStato,
+  risolviStatoInizioTurno,
 } from '@engine/battleEngine'
 import { getPokemon, getMossa } from '@data/index'
-import type { PokemonIstanza, MossaDef } from '@/types'
+import type { PokemonIstanza, MossaDef, StatoAlterato } from '@/types'
+
+const STATO_BADGE: Record<StatoAlterato, { label: string; color: string; emoji: string }> = {
+  Confuso: { label: 'CONF', color: 'bg-fuchsia-500', emoji: '💫' },
+  Addormentato: { label: 'ZZZ', color: 'bg-blue-500', emoji: '😴' },
+  Avvelenato: { label: 'PSN', color: 'bg-purple-600', emoji: '☠️' },
+}
 
 /**
  * Scena di battaglia.
@@ -126,11 +134,45 @@ export function BattagliaScene() {
 
   const eseguiMossa = (numeroMossa: 0 | 1 | 2) => {
     if (terminata || !turnoA) return
-    const ris = calcolaDanno(pkmnA, pkmnB, numeroMossa)
+
+    // Risoluzione stato a inizio turno (avvelenamento/sonno/confusione)
+    const statoRes = risolviStatoInizioTurno(pkmnA, hpMaxA)
+    if (statoRes.messaggi.length > 0) setLog((l) => [...l, ...statoRes.messaggi])
+    const pkmnAEffettivo = statoRes.istanza
+    setPkmnA(pkmnAEffettivo)
+    setSquadraA((sq) => updateInSquadra(sq, pkmnAEffettivo))
+
+    if (pkmnAEffettivo.hp <= 0) {
+      // Avvelenamento o auto-danno confusione ha ucciso pokemonA
+      const nextA = squadraA.find(
+        (p) => p.istanzaId !== pkmnAEffettivo.istanzaId && p.hp > 0
+      )
+      if (nextA) {
+        setLog((l) => [...l, `${pkmnAEffettivo.nome} è caduto! Mandi in campo ${nextA.nome}!`])
+        setPkmnA(nextA)
+        return
+      }
+      setLog((l) => [...l, 'Hai perso la battaglia...'])
+      setEsito('sconfitta')
+      setTerminata(true)
+      return
+    }
+
+    if (!statoRes.puoAgire) {
+      // Turno saltato: passa all'avversario
+      setTurnoA(false)
+      setTimeout(() => turnoAvversario(pkmnB), 1200)
+      return
+    }
+
+    const ris = calcolaDanno(pkmnAEffettivo, pkmnB, numeroMossa)
     if (!ris) return
 
     setShaking('B')
-    const nuovoB = { ...pkmnB, hp: Math.max(0, pkmnB.hp - ris.dannoFinale) }
+    let nuovoB = { ...pkmnB, hp: Math.max(0, pkmnB.hp - ris.dannoFinale) }
+    if (ris.statoApplicato && nuovoB.hp > 0) {
+      nuovoB = applicaStato(nuovoB, ris.statoApplicato)
+    }
     setPkmnB(nuovoB)
     const nuovaSquadraB = updateInSquadra(squadraB, nuovoB)
     setSquadraB(nuovaSquadraB)
@@ -188,14 +230,50 @@ export function BattagliaScene() {
   }
 
   const turnoAvversario = (statoBcorrente: PokemonIstanza) => {
-    const mossa = scegliMossaIA(statoBcorrente, pkmnA)
-    const ris = calcolaDanno(statoBcorrente, pkmnA, mossa)
+    // Risoluzione stato dell'avversario a inizio turno
+    const hpMaxBcorrente = calcolaHPMax(statoBcorrente)
+    const statoRes = risolviStatoInizioTurno(statoBcorrente, hpMaxBcorrente)
+    if (statoRes.messaggi.length > 0) setLog((l) => [...l, ...statoRes.messaggi])
+    const bEffettivo = statoRes.istanza
+    setPkmnB(bEffettivo)
+    setSquadraB((sq) => updateInSquadra(sq, bEffettivo))
+
+    if (bEffettivo.hp <= 0) {
+      const nextB = squadraB.find(
+        (p) => p.istanzaId !== bEffettivo.istanzaId && p.hp > 0
+      )
+      if (nextB && isNPC) {
+        setLog((l) => [...l, `${bEffettivo.nome} è caduto! L'avversario manda in campo ${nextB.nome}!`])
+        setPkmnB(nextB)
+        setTurnoA(true)
+        return
+      }
+      // Vittoria del giocatore via danno da stato
+      const aggiornatoA = premiaConXP(pkmnA, bEffettivo)
+      setPkmnA(aggiornatoA)
+      setSquadraA((sq) => updateInSquadra(sq, aggiornatoA))
+      setLog((l) => [...l, 'Hai vinto la battaglia!'])
+      setEsito('vittoria')
+      setTerminata(true)
+      return
+    }
+
+    if (!statoRes.puoAgire) {
+      setTurnoA(true)
+      return
+    }
+
+    const mossa = scegliMossaIA(bEffettivo, pkmnA)
+    const ris = calcolaDanno(bEffettivo, pkmnA, mossa)
     if (!ris) {
       setTurnoA(true)
       return
     }
     setShaking('A')
-    const nuovoA = { ...pkmnA, hp: Math.max(0, pkmnA.hp - ris.dannoFinale) }
+    let nuovoA = { ...pkmnA, hp: Math.max(0, pkmnA.hp - ris.dannoFinale) }
+    if (ris.statoApplicato && nuovoA.hp > 0) {
+      nuovoA = applicaStato(nuovoA, ris.statoApplicato)
+    }
     setPkmnA(nuovoA)
     const nuovaSquadraA = updateInSquadra(squadraA, nuovoA)
     setSquadraA(nuovaSquadraA)
@@ -203,7 +281,6 @@ export function BattagliaScene() {
     setTimeout(() => setShaking(null), 400)
 
     if (nuovoA.hp <= 0) {
-      // Cerca prossimo pokemon vivo del giocatore
       const nextA = nuovaSquadraA.find(
         (p) => p.istanzaId !== nuovoA.istanzaId && p.hp > 0
       )
@@ -369,7 +446,13 @@ function PokemonBattleSlot({
         <span className="text-5xl">{isPlayer ? '🐺' : '🦈'}</span>
       </motion.div>
 
-      <HpBar nome={istanza.nome} livello={istanza.livello} hp={istanza.hp} hpMax={hpMax} />
+      <HpBar
+        nome={istanza.nome}
+        livello={istanza.livello}
+        hp={istanza.hp}
+        hpMax={hpMax}
+        stato={istanza.stato?.tipo}
+      />
     </div>
   )
 }
@@ -379,19 +462,32 @@ function HpBar({
   livello,
   hp,
   hpMax,
+  stato,
 }: {
   nome: string
   livello: number
   hp: number
   hpMax: number
+  stato?: StatoAlterato
 }) {
   const pct = (hp / hpMax) * 100
   const colore = pct > 60 ? 'var(--hp-high)' : pct > 25 ? 'var(--hp-mid)' : 'var(--hp-low)'
+  const badge = stato ? STATO_BADGE[stato] : null
 
   return (
     <div className="arka-panel min-w-[200px] px-3 py-2">
       <div className="flex justify-between items-baseline mb-1">
-        <span className="font-bold text-sm">{nome}</span>
+        <span className="font-bold text-sm flex items-center gap-1.5">
+          {nome}
+          {badge && (
+            <span
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${badge.color} text-white uppercase tracking-wider`}
+              title={stato}
+            >
+              {badge.emoji} {badge.label}
+            </span>
+          )}
+        </span>
         <span className="text-xs text-arka-text-muted">LV. {livello}</span>
       </div>
       <div className="h-3 bg-slate-900 rounded-full overflow-hidden">
