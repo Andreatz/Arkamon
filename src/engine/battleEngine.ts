@@ -193,10 +193,18 @@ export function scegliMossaIA(
 
 // =============================================================
 // LIVELLI ED EVOLUZIONI
+// Regola di gioco: 1 XP per nemico sconfitto, 1 XP = 1 livello,
+// livello massimo 100. Per arrivare a lv 100 servono 99 KO.
 // =============================================================
 
-export function xpRichiestoPerLivello(livello: number): number {
-  return Math.floor(20 * Math.pow(livello, 1.3))
+export const LIVELLO_MAX = 100
+
+export function xpRichiestoPerLivello(_livello: number): number {
+  return 1
+}
+
+export function xpGuadagnato(_nemico: PokemonIstanza): number {
+  return 1
 }
 
 export function applicaXP(
@@ -207,11 +215,15 @@ export function applicaXP(
   livelliGuadagnati: number
   evoluzionePendente: { nuovaSpecieId: number } | null
 } {
+  if (istanza.livello >= LIVELLO_MAX) {
+    return { istanza: { ...istanza, xp: 0 }, livelliGuadagnati: 0, evoluzionePendente: null }
+  }
+
   let nuova = { ...istanza, xp: istanza.xp + xp }
   let livelliGuadagnati = 0
   let evoluzionePendente: { nuovaSpecieId: number } | null = null
 
-  while (nuova.xp >= xpRichiestoPerLivello(nuova.livello)) {
+  while (nuova.xp >= xpRichiestoPerLivello(nuova.livello) && nuova.livello < LIVELLO_MAX) {
     nuova.xp -= xpRichiestoPerLivello(nuova.livello)
     nuova.livello += 1
     livelliGuadagnati += 1
@@ -228,11 +240,8 @@ export function applicaXP(
     }
   }
 
+  if (nuova.livello >= LIVELLO_MAX) nuova.xp = 0
   return { istanza: nuova, livelliGuadagnati, evoluzionePendente }
-}
-
-export function xpGuadagnato(nemico: PokemonIstanza): number {
-  return Math.floor(BATTLE_CONSTANTS.XP_BASE_VITTORIA * (nemico.livello / 5))
 }
 
 // =============================================================

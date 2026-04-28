@@ -4,6 +4,7 @@ import { LaboratorioScene } from '@scenes/LaboratorioScene'
 import { MappaPrincipaleScene } from '@scenes/MappaPrincipaleScene'
 import { BattagliaScene } from '@scenes/BattagliaScene'
 import { PercorsoScene } from '@scenes/PercorsoScene'
+import { CittaScene } from '@scenes/CittaScene'
 import { AnimatePresence, motion } from 'framer-motion'
 
 /**
@@ -44,6 +45,8 @@ function renderScena(scena: string) {
       return <BattagliaScene />
     case 'percorso':
       return <PercorsoScene />
+    case 'citta':
+      return <CittaScene />
     default:
       return (
         <div className="flex items-center justify-center h-full text-arka-text-muted">

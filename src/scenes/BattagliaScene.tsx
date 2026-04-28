@@ -1,28 +1,43 @@
 import { useGameStore, creaIstanza } from '@store/gameStore'
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { calcolaDanno, calcolaHPMax, scegliMossaIA, tentaCattura } from '@engine/battleEngine'
+import {
+  calcolaDanno,
+  calcolaHPMax,
+  scegliMossaIA,
+  tentaCattura,
+  applicaXP,
+  xpGuadagnato,
+} from '@engine/battleEngine'
 import { getPokemon, getMossa } from '@data/index'
 import type { PokemonIstanza, MossaDef } from '@/types'
 
 /**
- * Scena di battaglia (versione dimostrativa).
+ * Scena di battaglia.
  *
- * Mostra il flusso: tiro dadi → calcolo danno → animazione HP bar →
- * turno avversario → log degli eventi.
+ * Supporta:
+ * - Battaglie selvatiche (1 vs 1) con cattura
+ * - Battaglie NPC/PVP multi-pokemon (switch automatico su KO)
+ * - XP per nemico sconfitto (1 KO = 1 livello, cap 100)
+ * - Evoluzioni inline al raggiungimento della soglia
  *
- * Per ora crea una battaglia demo (Vyrath vs Weedrug). In produzione
- * lo store popolerà la battaglia con i dati reali.
+ * Aggiornamenti del Pokémon attivo (HP, livello, evoluzione) vengono
+ * persistiti nello store all'uscita dalla scena.
  */
 export function BattagliaScene() {
   const vaiAScena = useGameStore((s) => s.vaiAScena)
   const battaglia = useGameStore((s) => s.battaglia)
   const terminaBattaglia = useGameStore((s) => s.terminaBattaglia)
   const aggiungiPokemon = useGameStore((s) => s.aggiungiPokemon)
+  const aggiornaPokemon = useGameStore((s) => s.aggiornaPokemon)
   const giocatoreAttivo = useGameStore((s) => s.giocatoreAttivo)
+  const risolviBattagliaNPC = useGameStore((s) => s.risolviBattagliaNPC)
+  const [esito, setEsito] = useState<'vittoria' | 'sconfitta' | null>(null)
 
   const [pkmnA, setPkmnA] = useState<PokemonIstanza | null>(null)
   const [pkmnB, setPkmnB] = useState<PokemonIstanza | null>(null)
+  const [squadraA, setSquadraA] = useState<PokemonIstanza[]>([])
+  const [squadraB, setSquadraB] = useState<PokemonIstanza[]>([])
   const [log, setLog] = useState<string[]>([])
   const [turnoA, setTurnoA] = useState(true)
   const [shaking, setShaking] = useState<'A' | 'B' | null>(null)
@@ -30,9 +45,10 @@ export function BattagliaScene() {
 
   useEffect(() => {
     if (battaglia) {
-      // Battaglia avviata dallo store (es. da PercorsoScene)
       setPkmnA(battaglia.pokemonA)
       setPkmnB(battaglia.pokemonB)
+      setSquadraA(battaglia.squadraA ?? [battaglia.pokemonA])
+      setSquadraB(battaglia.squadraB ?? [battaglia.pokemonB])
       setLog(battaglia.log)
     } else {
       // Fallback demo: Vyrath vs Weedrug lvl 5
@@ -40,18 +56,34 @@ export function BattagliaScene() {
       const b = creaIstanza(13, 5)
       setPkmnA(a)
       setPkmnB(b)
+      setSquadraA(a ? [a] : [])
+      setSquadraB(b ? [b] : [])
       setLog([`Appare ${b?.nome} selvatico!`])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const luogoRitorno = battaglia?.luogoRitorno ?? 'mappa-principale'
+  const isNPC = !!battaglia && battaglia.tipo !== 'Selvatico' && battaglia.allenatoreId !== undefined
+  const isSelvatico = !battaglia || battaglia.tipo === 'Selvatico'
+  const isPercorso = !!luogoRitorno && /^Percorso_/.test(luogoRitorno)
+
+  /** Aggiorna l'istanza nella squadra mantenendo l'ordine. */
+  const updateInSquadra = (squadra: PokemonIstanza[], updated: PokemonIstanza) =>
+    squadra.map((p) => (p.istanzaId === updated.istanzaId ? updated : p))
+
   const tornaIndietro = () => {
+    if (isNPC && esito) risolviBattagliaNPC(esito)
+    // Persiste tutte le modifiche (livello, xp, specieId post-evoluzione)
+    // PRIMA di terminaBattaglia (che cura HP a max ma preserva il resto).
+    for (const p of squadraA) aggiornaPokemon(giocatoreAttivo, p)
     terminaBattaglia(true)
-    if (luogoRitorno === 'mappa-principale' || !luogoRitorno) {
-      vaiAScena('mappa-principale')
-    } else {
+    if (isPercorso) {
       vaiAScena('percorso', { luogo: luogoRitorno })
+    } else if (luogoRitorno && luogoRitorno !== 'mappa-principale') {
+      vaiAScena('citta', { luogo: luogoRitorno })
+    } else {
+      vaiAScena('mappa-principale')
     }
   }
 
@@ -61,6 +93,37 @@ export function BattagliaScene() {
   const hpMaxA = calcolaHPMax(pkmnA)
   const hpMaxB = calcolaHPMax(pkmnB)
 
+  /**
+   * Premia pokemonA con XP per il nemico sconfitto, gestisce level-up
+   * ed evoluzione inline. Ritorna l'istanza aggiornata.
+   */
+  const premiaConXP = (
+    attivo: PokemonIstanza,
+    sconfitto: PokemonIstanza
+  ): PokemonIstanza => {
+    const xpRes = applicaXP(attivo, xpGuadagnato(sconfitto))
+    let aggiornato = xpRes.istanza
+    const messaggi: string[] = []
+    if (xpRes.livelliGuadagnati > 0) {
+      messaggi.push(`${attivo.nome} è salito al livello ${aggiornato.livello}!`)
+    }
+    if (xpRes.evoluzionePendente) {
+      const nuova = getPokemon(xpRes.evoluzionePendente.nuovaSpecieId)
+      if (nuova) {
+        // Evoluzione inline (la scena dedicata sarà introdotta più avanti)
+        aggiornato = {
+          ...aggiornato,
+          specieId: nuova.id,
+          nome: nuova.nome,
+        }
+        aggiornato.hp = calcolaHPMax(aggiornato)
+        messaggi.push(`✨ ${attivo.nome} si è evoluto in ${nuova.nome}!`)
+      }
+    }
+    if (messaggi.length > 0) setLog((l) => [...l, ...messaggi])
+    return aggiornato
+  }
+
   const eseguiMossa = (numeroMossa: 0 | 1 | 2) => {
     if (terminata || !turnoA) return
     const ris = calcolaDanno(pkmnA, pkmnB, numeroMossa)
@@ -69,12 +132,31 @@ export function BattagliaScene() {
     setShaking('B')
     const nuovoB = { ...pkmnB, hp: Math.max(0, pkmnB.hp - ris.dannoFinale) }
     setPkmnB(nuovoB)
+    const nuovaSquadraB = updateInSquadra(squadraB, nuovoB)
+    setSquadraB(nuovaSquadraB)
     setLog((l) => [...l, ...ris.messaggi])
 
     setTimeout(() => setShaking(null), 400)
 
     if (nuovoB.hp <= 0) {
-      setLog((l) => [...l, `Hai vinto la battaglia!`])
+      // XP a pokemonA per il KO (regola: 1 nemico = 1 xp = 1 livello)
+      const aggiornatoA = premiaConXP(pkmnA, nuovoB)
+      setPkmnA(aggiornatoA)
+      setSquadraA((sq) => updateInSquadra(sq, aggiornatoA))
+
+      // Cerca prossimo nemico vivo
+      const nextB = nuovaSquadraB.find(
+        (p) => p.istanzaId !== nuovoB.istanzaId && p.hp > 0
+      )
+      if (nextB && isNPC) {
+        setLog((l) => [...l, `L'avversario manda in campo ${nextB.nome}!`])
+        setPkmnB(nextB)
+        // Il giocatore mantiene il turno dopo il KO + switch nemico
+        return
+      }
+      // Nessun altro avversario → vittoria
+      setLog((l) => [...l, 'Hai vinto la battaglia!'])
+      setEsito('vittoria')
       setTerminata(true)
       return
     }
@@ -95,6 +177,7 @@ export function BattagliaScene() {
     if (ris.riuscita) {
       setLog((l) => [...l, `${pkmnB.nome} è stato catturato!`])
       aggiungiPokemon(giocatoreAttivo, pkmnB)
+      setEsito('vittoria')
       setTerminata(true)
       return
     }
@@ -114,10 +197,27 @@ export function BattagliaScene() {
     setShaking('A')
     const nuovoA = { ...pkmnA, hp: Math.max(0, pkmnA.hp - ris.dannoFinale) }
     setPkmnA(nuovoA)
+    const nuovaSquadraA = updateInSquadra(squadraA, nuovoA)
+    setSquadraA(nuovaSquadraA)
     setLog((l) => [...l, ...ris.messaggi])
     setTimeout(() => setShaking(null), 400)
+
     if (nuovoA.hp <= 0) {
-      setLog((l) => [...l, `Hai perso la battaglia...`])
+      // Cerca prossimo pokemon vivo del giocatore
+      const nextA = nuovaSquadraA.find(
+        (p) => p.istanzaId !== nuovoA.istanzaId && p.hp > 0
+      )
+      if (nextA) {
+        setLog((l) => [
+          ...l,
+          `${nuovoA.nome} è KO! Mandi in campo ${nextA.nome}!`,
+        ])
+        setPkmnA(nextA)
+        setTurnoA(true)
+        return
+      }
+      setLog((l) => [...l, 'Hai perso la battaglia...'])
+      setEsito('sconfitta')
       setTerminata(true)
     } else {
       setTurnoA(true)
@@ -126,6 +226,14 @@ export function BattagliaScene() {
 
   return (
     <div className="w-full h-full relative bg-gradient-to-b from-emerald-900 via-emerald-700 to-emerald-500">
+      {/* Indicatore squadra (solo NPC) */}
+      {isNPC && (
+        <>
+          <SquadIndicator squadra={squadraB} position="top-left" />
+          <SquadIndicator squadra={squadraA} position="bottom-right" />
+        </>
+      )}
+
       {/* Pokémon avversario (alto a destra) */}
       <PokemonBattleSlot
         istanza={pkmnB}
@@ -165,7 +273,7 @@ export function BattagliaScene() {
       </div>
 
       {/* Pulsante cattura (solo battaglie selvatiche) */}
-      {battaglia?.tipo === 'Selvatico' && !terminata && (
+      {isSelvatico && !terminata && battaglia && (
         <motion.button
           whileHover={turnoA ? { scale: 1.05 } : {}}
           whileTap={turnoA ? { scale: 0.95 } : {}}
@@ -177,27 +285,65 @@ export function BattagliaScene() {
         </motion.button>
       )}
 
+      {/* Esito + monete (solo battaglie NPC) */}
+      {terminata && isNPC && esito && (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 arka-panel px-6 py-3 z-20">
+          <p className="text-yellow-300 font-bold text-center">
+            {esito === 'vittoria' ? '+200₳ guadagnati' : '-200₳ persi'}
+          </p>
+        </div>
+      )}
+
       {/* Pulsante exit */}
       {terminata && (
         <button
           className="arka-button absolute bottom-4 left-4 z-20"
           onClick={tornaIndietro}
         >
-          {luogoRitorno === 'mappa-principale' ? 'Torna alla mappa' : 'Torna al percorso'}
+          {isPercorso
+            ? 'Torna al percorso'
+            : luogoRitorno !== 'mappa-principale'
+            ? 'Torna in città'
+            : 'Torna alla mappa'}
         </button>
       )}
 
       {/* Indicatore turno */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 arka-panel px-4 py-1">
-        <span className="text-sm">{terminata ? 'Battaglia finita' : turnoA ? 'Il tuo turno' : "Turno avversario..."}</span>
+        <span className="text-sm">
+          {terminata ? 'Battaglia finita' : turnoA ? 'Il tuo turno' : 'Turno avversario...'}
+        </span>
       </div>
     </div>
   )
 }
 
 // =============================================================
-// SOTTOCOMPONENTI (qui per brevità - in produzione in /components)
+// SOTTOCOMPONENTI
 // =============================================================
+
+function SquadIndicator({
+  squadra,
+  position,
+}: {
+  squadra: PokemonIstanza[]
+  position: 'top-left' | 'bottom-right'
+}) {
+  const posClass = position === 'top-left' ? 'top-16 left-4' : 'bottom-44 right-4'
+  return (
+    <div className={`absolute ${posClass} flex gap-1 z-10`}>
+      {squadra.map((p) => (
+        <div
+          key={p.istanzaId}
+          className={`w-3 h-3 rounded-full border border-white/60 ${
+            p.hp > 0 ? 'bg-emerald-400' : 'bg-slate-600'
+          }`}
+          title={`${p.nome} lv${p.livello} (${p.hp} HP)`}
+        />
+      ))}
+    </div>
+  )
+}
 
 function PokemonBattleSlot({
   istanza,
@@ -211,9 +357,7 @@ function PokemonBattleSlot({
   shaking: boolean
 }) {
   const isPlayer = position === 'bottom-left'
-  const posClass = isPlayer
-    ? 'bottom-32 left-12 flex-row'
-    : 'top-12 right-12 flex-row-reverse'
+  const posClass = isPlayer ? 'bottom-32 left-12 flex-row' : 'top-12 right-12 flex-row-reverse'
 
   return (
     <div className={`absolute ${posClass} flex items-center gap-4 z-10`}>
@@ -230,7 +374,17 @@ function PokemonBattleSlot({
   )
 }
 
-function HpBar({ nome, livello, hp, hpMax }: { nome: string; livello: number; hp: number; hpMax: number }) {
+function HpBar({
+  nome,
+  livello,
+  hp,
+  hpMax,
+}: {
+  nome: string
+  livello: number
+  hp: number
+  hpMax: number
+}) {
   const pct = (hp / hpMax) * 100
   const colore = pct > 60 ? 'var(--hp-high)' : pct > 25 ? 'var(--hp-mid)' : 'var(--hp-low)'
 
@@ -282,7 +436,9 @@ function MoveButton({
     >
       <div className="font-bold text-sm">{mossa.nome}</div>
       <div className="text-xs text-arka-text-muted flex items-center gap-2 mt-1">
-        <span>🎲 {dadi}d6 +{incremento}</span>
+        <span>
+          🎲 {dadi}d6 +{incremento}
+        </span>
         <span className="text-xs">{mossa.tipo}</span>
       </div>
     </motion.button>

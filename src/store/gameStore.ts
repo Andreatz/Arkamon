@@ -15,8 +15,14 @@ import type {
   NavigazioneScena,
   SceneId,
 } from '@/types'
-import { calcolaHPMax } from '@engine/battleEngine'
-import { getPokemon } from '@data/index'
+import {
+  calcolaHPMax,
+  calcolaVariazioneMonete,
+  determinaIniziativa,
+  type EsitoBattaglia,
+  type TipoAvversario,
+} from '@engine/battleEngine'
+import { getPokemon, getAllenatore } from '@data/index'
 
 interface GameState {
   // === STATO GIOCATORI ===
@@ -59,6 +65,15 @@ interface GameState {
 
   /** Aggiunge (o sottrae se delta < 0) monete al giocatore, non scende sotto 0 */
   aggiornaMonete: (giocatoreId: 1 | 2, delta: number) => void
+
+  /** Avvia una battaglia contro un allenatore NPC. Ritorna false se non avviabile */
+  iniziaBattagliaNPC: (allenatoreId: number, luogoRitorno: string) => boolean
+
+  /** Risolve l'esito di una battaglia NPC: applica monete e marca sconfitto */
+  risolviBattagliaNPC: (esito: EsitoBattaglia) => void
+
+  /** Cura tutta la squadra del giocatore (Centro Pokemon) */
+  curaSquadra: (giocatoreId: 1 | 2) => void
 
   /** Avvia una nuova battaglia */
   iniziaBattaglia: (battaglia: StatoBattaglia) => void
@@ -180,6 +195,91 @@ export const useGameStore = create<GameState>()(
           return {
             [chiaveG]: { ...g, monete: Math.max(0, g.monete + delta) },
           } as Partial<GameState>
+        }),
+
+      // Porting di: IniziaBattagliaAllenatore da old_files/Mod_Game_Events.txt
+      iniziaBattagliaNPC: (allenatoreId, luogoRitorno) => {
+        const allenatore = getAllenatore(allenatoreId)
+        if (!allenatore || allenatore.squadra.length === 0) return false
+
+        const state = get()
+        const giocatore =
+          state.giocatoreAttivo === 1 ? state.giocatore1 : state.giocatore2
+        if (giocatore.squadra.length === 0) return false
+        const pokemonA = giocatore.squadra.find((p) => p.hp > 0) ?? giocatore.squadra[0]
+        if (!pokemonA) return false
+
+        // Crea istanze fresche per tutta la squadra dell'allenatore
+        const squadraB: PokemonIstanza[] = []
+        for (let i = 0; i < allenatore.squadra.length; i++) {
+          const slot = allenatore.squadra[i]
+          const speci = getPokemon(slot.pokemonId)
+          if (!speci) continue
+          const ist: PokemonIstanza = {
+            istanzaId: `npc-${allenatoreId}-${i}-${Date.now()}`,
+            specieId: slot.pokemonId,
+            nome: speci.nome,
+            livello: slot.livello,
+            hp: 0,
+            xp: 0,
+          }
+          ist.hp = calcolaHPMax(ist)
+          squadraB.push(ist)
+        }
+        if (squadraB.length === 0) return false
+
+        const pokemonB = squadraB[0]
+        const turnoCorrente = determinaIniziativa(pokemonA.livello, pokemonB.livello)
+        const tipo = allenatore.tipo === 'PVP' ? 'PVP' : 'NPC'
+
+        set({
+          battaglia: {
+            tipo,
+            pokemonA,
+            pokemonB,
+            hpMaxA: calcolaHPMax(pokemonA),
+            hpMaxB: calcolaHPMax(pokemonB),
+            turnoCorrente,
+            squadraA: giocatore.squadra,
+            squadraB,
+            luogoRitorno,
+            allenatoreId,
+            log: [`${allenatore.nome} ti sfida!`],
+            evoluzioneInAttesa: null,
+          },
+        })
+        return true
+      },
+
+      risolviBattagliaNPC: (esito) => {
+        const state = get()
+        const b = state.battaglia
+        if (!b || b.allenatoreId === undefined || b.tipo === 'Selvatico') return
+
+        const tipoAvv: TipoAvversario = b.tipo === 'PVP' ? 'PVP' : 'NPC'
+        const delta = calcolaVariazioneMonete(esito, tipoAvv)
+        const giocatoreId = state.giocatoreAttivo
+        const chiaveG = giocatoreId === 1 ? 'giocatore1' : 'giocatore2'
+        const g = state[chiaveG]
+
+        const nuoviSconfitti = new Set(g.allenatoriSconfitti)
+        if (esito === 'vittoria') nuoviSconfitti.add(b.allenatoreId)
+
+        set({
+          [chiaveG]: {
+            ...g,
+            monete: Math.max(0, g.monete + delta),
+            allenatoriSconfitti: nuoviSconfitti,
+          },
+        } as Partial<GameState>)
+      },
+
+      curaSquadra: (giocatoreId) =>
+        set((s) => {
+          const chiaveG = giocatoreId === 1 ? 'giocatore1' : 'giocatore2'
+          const g = s[chiaveG]
+          const squadraCurata = g.squadra.map((p) => ({ ...p, hp: calcolaHPMax(p) }))
+          return { [chiaveG]: { ...g, squadra: squadraCurata } } as Partial<GameState>
         }),
 
       iniziaBattaglia: (battaglia) => set({ battaglia }),

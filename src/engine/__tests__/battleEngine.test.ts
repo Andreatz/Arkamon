@@ -5,6 +5,9 @@ import {
   rollD6,
   roundHalfUp,
   tentaCattura,
+  applicaXP,
+  xpGuadagnato,
+  xpRichiestoPerLivello,
 } from '@engine/battleEngine'
 import { efficaciaTipo } from '@data/index'
 import type { PokemonIstanza } from '@/types'
@@ -74,6 +77,40 @@ describe('determinaIniziativa', () => {
   })
   it('pareggio + rng >= 0.5 → B', () => {
     expect(determinaIniziativa(5, 5, () => 0.7)).toBe('B')
+  })
+})
+
+describe('applicaXP (regola: 1 xp = 1 livello, cap a 100)', () => {
+  it('xpRichiestoPerLivello sempre 1', () => {
+    expect(xpRichiestoPerLivello(5)).toBe(1)
+    expect(xpRichiestoPerLivello(50)).toBe(1)
+    expect(xpRichiestoPerLivello(99)).toBe(1)
+  })
+  it('xpGuadagnato sempre 1', () => {
+    expect(xpGuadagnato(mkIstanza(1, 5))).toBe(1)
+    expect(xpGuadagnato(mkIstanza(1, 50))).toBe(1)
+  })
+  it('Vyrath lvl 5 + 1 xp → lvl 6', () => {
+    const r = applicaXP(mkIstanza(1, 5), 1)
+    expect(r.istanza.livello).toBe(6)
+    expect(r.livelliGuadagnati).toBe(1)
+    expect(r.istanza.xp).toBe(0)
+    expect(r.evoluzionePendente).toBe(null)
+  })
+  it('Vyrath lvl 14 + 1 xp → lvl 15 con evoluzionePendente (id 2)', () => {
+    const r = applicaXP(mkIstanza(1, 14), 1)
+    expect(r.istanza.livello).toBe(15)
+    expect(r.evoluzionePendente?.nuovaSpecieId).toBe(2)
+  })
+  it('Vyrath lvl 99 + 1 xp → lvl 100 (cap raggiunto)', () => {
+    const r = applicaXP(mkIstanza(1, 99), 1)
+    expect(r.istanza.livello).toBe(100)
+    expect(r.istanza.xp).toBe(0)
+  })
+  it('Vyrath lvl 100 + 1 xp → resta lvl 100, no level-up', () => {
+    const r = applicaXP(mkIstanza(1, 100), 1)
+    expect(r.istanza.livello).toBe(100)
+    expect(r.livelliGuadagnati).toBe(0)
   })
 })
 
