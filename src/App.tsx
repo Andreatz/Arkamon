@@ -6,6 +6,7 @@ import { BattagliaScene } from '@scenes/BattagliaScene'
 import { PercorsoScene } from '@scenes/PercorsoScene'
 import { CittaScene } from '@scenes/CittaScene'
 import { DepositoScene } from '@scenes/DepositoScene'
+import { EvoluzioneScene } from '@scenes/EvoluzioneScene'
 import { AnimatePresence, motion } from 'framer-motion'
 
 /**
@@ -50,6 +51,8 @@ function renderScena(scena: string) {
       return <CittaScene />
     case 'deposito':
       return <DepositoScene />
+    case 'evoluzione':
+      return <EvoluzioneScene />
     default:
       return (
         <div className="flex items-center justify-center h-full text-arka-text-muted">

@@ -35,6 +35,9 @@ interface GameState {
   // === STATO BATTAGLIA ===
   battaglia: StatoBattaglia | null
 
+  /** ID specie dello starter assegnato al Rivale (quello scartato dai giocatori) */
+  rivaleStarterId: number | null
+
   // === NAVIGAZIONE ===
   scenaCorrente: NavigazioneScena
   scenaPrecedente: NavigazioneScena | null
@@ -78,6 +81,8 @@ interface GameState {
 
   /** Scambia o sposta il contenuto tra due slot (squadra o deposito) */
   scambiaSlot: (giocatoreId: 1 | 2, source: SlotRef, target: SlotRef) => void
+  /** Assegna lo starter scartato al Rivale (porting di AssegnaRivaleEVaiAllaMappa) */
+  assegnaRivaleStarter: (specieId: number) => void
 
   /** Avvia una nuova battaglia */
   iniziaBattaglia: (battaglia: StatoBattaglia) => void
@@ -123,6 +128,7 @@ export const useGameStore = create<GameState>()(
       giocatore2: giocatoreVuoto(2),
       giocatoreAttivo: 1,
       battaglia: null,
+      rivaleStarterId: null,
       scenaCorrente: { scena: 'titolo' },
       scenaPrecedente: null,
 
@@ -213,10 +219,19 @@ export const useGameStore = create<GameState>()(
         const pokemonA = giocatore.squadra.find((p) => p.hp > 0) ?? giocatore.squadra[0]
         if (!pokemonA) return false
 
+        // Per il Rivale (tipo PVP), il primo slot è lo starter scartato
+        // dai giocatori (porting di AssegnaRivaleEVaiAllaMappa).
+        const isRivale = allenatore.tipo === 'PVP'
+        const slotsAllenatore = allenatore.squadra.map((s, i) =>
+          isRivale && i === 0 && state.rivaleStarterId
+            ? { ...s, pokemonId: state.rivaleStarterId }
+            : s
+        )
+
         // Crea istanze fresche per tutta la squadra dell'allenatore
         const squadraB: PokemonIstanza[] = []
-        for (let i = 0; i < allenatore.squadra.length; i++) {
-          const slot = allenatore.squadra[i]
+        for (let i = 0; i < slotsAllenatore.length; i++) {
+          const slot = slotsAllenatore[i]
           const speci = getPokemon(slot.pokemonId)
           if (!speci) continue
           const ist: PokemonIstanza = {
@@ -260,7 +275,15 @@ export const useGameStore = create<GameState>()(
         const b = state.battaglia
         if (!b || b.allenatoreId === undefined || b.tipo === 'Selvatico') return
 
-        const tipoAvv: TipoAvversario = b.tipo === 'PVP' ? 'PVP' : 'NPC'
+        // tipoAvv per il calcolo monete: derivato da allenatore.tipo
+        // (Capopalestra → +1000, NPC → +200, PVP → 0)
+        const allenatore = getAllenatore(b.allenatoreId)
+        const tipoAvv: TipoAvversario =
+          allenatore?.tipo === 'Capopalestra'
+            ? 'Capopalestra'
+            : allenatore?.tipo === 'PVP'
+            ? 'PVP'
+            : 'NPC'
         const delta = calcolaVariazioneMonete(esito, tipoAvv)
         const giocatoreId = state.giocatoreAttivo
         const chiaveG = giocatoreId === 1 ? 'giocatore1' : 'giocatore2'
@@ -297,6 +320,8 @@ export const useGameStore = create<GameState>()(
             [chiaveG]: { ...g, squadra: r.squadra, deposito: r.deposito },
           } as Partial<GameState>
         }),
+      // Porting di: AssegnaRivaleEVaiAllaMappa da old_files/Mod_Game_Events.txt
+      assegnaRivaleStarter: (specieId) => set({ rivaleStarterId: specieId }),
 
       iniziaBattaglia: (battaglia) => set({ battaglia }),
 
@@ -306,12 +331,14 @@ export const useGameStore = create<GameState>()(
       terminaBattaglia: (curaCompleta) =>
         set((s) => {
           if (!curaCompleta) return { battaglia: null }
-          // Cura tutti i pokemon di entrambi i giocatori (come VBA: PostBattaglia)
+          // Cura HP a max e pulisce eventuali stati alterati (porting di
+          // Mod_Battle_Engine.PulisciStato + post-battaglia VBA).
           const curaSquadra = (squadra: PokemonIstanza[]) =>
             squadra.map((p) => {
               const specie = getPokemon(p.specieId)
               if (!specie) return p
-              return { ...p, hp: calcolaHPMax(p) }
+              const { stato: _stato, ...senzaStato } = p
+              return { ...senzaStato, hp: calcolaHPMax(senzaStato) }
             })
           return {
             battaglia: null,
@@ -326,6 +353,7 @@ export const useGameStore = create<GameState>()(
           giocatore2: giocatoreVuoto(2),
           giocatoreAttivo: 1,
           battaglia: null,
+          rivaleStarterId: null,
           scenaCorrente: { scena: 'titolo' },
           scenaPrecedente: null,
         }),

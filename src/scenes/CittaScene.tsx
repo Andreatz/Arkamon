@@ -1,13 +1,23 @@
 import { useGameStore } from '@store/gameStore'
 import { getAllenatoriInLuogo, getPokemon } from '@data/index'
 import { motion } from 'framer-motion'
+import type { AllenatoreDef } from '@/types'
 
 /**
- * Scena Città: lista degli allenatori NPC sfidabili, Centro Pokémon
- * (cura completa della squadra), uscita verso la mappa.
+ * Scena Città: lista degli allenatori sfidabili (NPC + Capopalestra)
+ * + Centro Pokémon (cura completa della squadra) + ritorno alla mappa.
  *
  * Il Rivale (tipo PVP) NON appare qui — viene gestito altrove.
+ *
+ * Capopalestra hanno UI distinta (icona corona, ricompensa +1000) e
+ * appaiono dopo gli NPC nella griglia.
  */
+const RICOMPENSA: Record<AllenatoreDef['tipo'], number> = {
+  NPC: 200,
+  Capopalestra: 1000,
+  PVP: 0,
+}
+
 export function CittaScene() {
   const scenaCorrente = useGameStore((s) => s.scenaCorrente)
   const giocatoreAttivo = useGameStore((s) => s.giocatoreAttivo)
@@ -19,16 +29,17 @@ export function CittaScene() {
   const curaSquadra = useGameStore((s) => s.curaSquadra)
 
   const luogo = (scenaCorrente.payload?.luogo as string) || 'Venezia'
-  const tuttiAllenatori = getAllenatoriInLuogo(luogo).filter((a) => a.tipo === 'NPC')
+  const tutti = getAllenatoriInLuogo(luogo).filter((a) => a.tipo !== 'PVP')
+  // NPC prima, Capopalestra dopo (per progressione visiva)
+  const allenatoriOrdinati = [...tutti].sort((a, b) => {
+    if (a.tipo === b.tipo) return a.id - b.id
+    return a.tipo === 'NPC' ? -1 : 1
+  })
 
   const sfida = (allenatoreId: number) => {
     if (giocatore.allenatoriSconfitti.has(allenatoreId)) return
     const ok = iniziaBattagliaNPC(allenatoreId, luogo)
     if (ok) vaiAScena('battaglia')
-  }
-
-  const heal = () => {
-    curaSquadra(giocatoreAttivo)
   }
 
   return (
@@ -68,7 +79,7 @@ export function CittaScene() {
         <motion.button
           whileHover={{ scale: 1.05, y: -4 }}
           whileTap={{ scale: 0.95 }}
-          onClick={heal}
+          onClick={() => curaSquadra(giocatoreAttivo)}
           className="arka-panel p-6 flex flex-col items-center justify-center cursor-pointer hover:border-arka-accent col-span-1"
         >
           <span className="text-6xl mb-2">🏥</span>
@@ -78,38 +89,54 @@ export function CittaScene() {
           </p>
         </motion.button>
 
-        {/* Allenatori */}
-        {tuttiAllenatori.map((allenatore) => {
-          const sconfitto = giocatore.allenatoriSconfitti.has(allenatore.id)
-          const primoPkmn = getPokemon(allenatore.squadra[0]?.pokemonId)
+        {/* Allenatori (NPC + Capopalestra) */}
+        {allenatoriOrdinati.map((a) => {
+          const sconfitto = giocatore.allenatoriSconfitti.has(a.id)
+          const primoPkmn = getPokemon(a.squadra[0]?.pokemonId)
+          const isCapo = a.tipo === 'Capopalestra'
+          const ricompensa = RICOMPENSA[a.tipo]
           return (
             <motion.button
-              key={allenatore.id}
+              key={a.id}
               whileHover={!sconfitto ? { scale: 1.05, y: -4 } : {}}
               whileTap={!sconfitto ? { scale: 0.95 } : {}}
               disabled={sconfitto}
-              onClick={() => sfida(allenatore.id)}
+              onClick={() => sfida(a.id)}
               className={`arka-panel p-6 flex flex-col items-center justify-center
                 ${sconfitto ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-arka-accent'}
+                ${isCapo && !sconfitto ? 'border-yellow-400 shadow-lg shadow-yellow-500/20' : ''}
               `}
             >
-              <span className="text-6xl mb-2">{sconfitto ? '✅' : '🥋'}</span>
-              <h3 className="text-xl font-bold">{allenatore.nome}</h3>
+              <span className="text-6xl mb-2">
+                {sconfitto ? '✅' : isCapo ? '👑' : '🥋'}
+              </span>
+              <h3 className={`text-xl font-bold ${isCapo && !sconfitto ? 'text-yellow-300' : ''}`}>
+                {a.nome}
+              </h3>
+              {isCapo && !sconfitto && (
+                <span className="text-[10px] uppercase tracking-wider text-yellow-300 mt-0.5">
+                  Capopalestra
+                </span>
+              )}
               <p className="text-xs text-arka-text-muted text-center mt-1">
                 {sconfitto
                   ? 'Già sconfitto'
                   : primoPkmn
-                  ? `Squadra: ${allenatore.squadra.length}× (lv ${allenatore.squadra[0].livello})`
+                  ? `Squadra: ${a.squadra.length}× (lv ${a.squadra[0].livello})`
                   : 'Allenatore'}
               </p>
               {!sconfitto && (
-                <span className="text-xs text-yellow-300 mt-2">+200₳ se vinci</span>
+                <span
+                  className={`text-xs mt-2 ${isCapo ? 'text-yellow-300 font-bold' : 'text-yellow-400/80'}`}
+                >
+                  +{ricompensa}₳ se vinci
+                </span>
               )}
             </motion.button>
           )
         })}
 
-        {tuttiAllenatori.length === 0 && (
+        {allenatoriOrdinati.length === 0 && (
           <div className="col-span-2 arka-panel p-6 flex items-center justify-center">
             <p className="text-arka-text-muted italic">
               Nessun allenatore in questa città

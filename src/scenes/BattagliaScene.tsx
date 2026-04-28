@@ -8,8 +8,11 @@ import {
   tentaCattura,
   applicaXP,
   xpGuadagnato,
+  applicaStato,
+  risolviStatoInizioTurno,
 } from '@engine/battleEngine'
-import { getPokemon, getMossa } from '@data/index'
+import { getPokemon, getMossa, getAllenatore } from '@data/index'
+import { calcolaVariazioneMonete, type TipoAvversario } from '@engine/battleEngine'
 import type { PokemonIstanza, MossaDef } from '@/types'
 
 /**
@@ -42,6 +45,10 @@ export function BattagliaScene() {
   const [turnoA, setTurnoA] = useState(true)
   const [shaking, setShaking] = useState<'A' | 'B' | null>(null)
   const [terminata, setTerminata] = useState(false)
+  // Evoluzioni accumulate durante la battaglia: applicate dopo, in EvoluzioneScene
+  const [evoluzioniInAttesa, setEvoluzioniInAttesa] = useState<
+    { istanzaId: string; oldSpecieId: number; newSpecieId: number }[]
+  >([])
 
   useEffect(() => {
     if (battaglia) {
@@ -74,10 +81,20 @@ export function BattagliaScene() {
 
   const tornaIndietro = () => {
     if (isNPC && esito) risolviBattagliaNPC(esito)
-    // Persiste tutte le modifiche (livello, xp, specieId post-evoluzione)
-    // PRIMA di terminaBattaglia (che cura HP a max ma preserva il resto).
+    // Persiste tutte le modifiche (livello, xp). L'evoluzione vera e propria
+    // (cambio di specieId) avviene dopo, nella EvoluzioneScene.
     for (const p of squadraA) aggiornaPokemon(giocatoreAttivo, p)
     terminaBattaglia(true)
+
+    if (evoluzioniInAttesa.length > 0) {
+      vaiAScena('evoluzione', {
+        evoluzioni: evoluzioniInAttesa,
+        luogoRitorno,
+        giocatoreId: giocatoreAttivo,
+      })
+      return
+    }
+
     if (isPercorso) {
       vaiAScena('percorso', { luogo: luogoRitorno })
     } else if (luogoRitorno && luogoRitorno !== 'mappa-principale') {
@@ -94,43 +111,78 @@ export function BattagliaScene() {
   const hpMaxB = calcolaHPMax(pkmnB)
 
   /**
-   * Premia pokemonA con XP per il nemico sconfitto, gestisce level-up
-   * ed evoluzione inline. Ritorna l'istanza aggiornata.
+   * Premia pokemonA con XP per il nemico sconfitto, gestisce level-up.
+   * L'eventuale evoluzione viene accodata in `evoluzioniInAttesa` e
+   * processata dopo la fine della battaglia nella EvoluzioneScene
+   * (NON applicata inline qui, per coerenza con il flusso classico
+   * "vittoria → schermata evoluzione").
    */
   const premiaConXP = (
     attivo: PokemonIstanza,
     sconfitto: PokemonIstanza
   ): PokemonIstanza => {
     const xpRes = applicaXP(attivo, xpGuadagnato(sconfitto))
-    let aggiornato = xpRes.istanza
     const messaggi: string[] = []
     if (xpRes.livelliGuadagnati > 0) {
-      messaggi.push(`${attivo.nome} è salito al livello ${aggiornato.livello}!`)
+      messaggi.push(`${attivo.nome} è salito al livello ${xpRes.istanza.livello}!`)
     }
     if (xpRes.evoluzionePendente) {
-      const nuova = getPokemon(xpRes.evoluzionePendente.nuovaSpecieId)
-      if (nuova) {
-        // Evoluzione inline (la scena dedicata sarà introdotta più avanti)
-        aggiornato = {
-          ...aggiornato,
-          specieId: nuova.id,
-          nome: nuova.nome,
-        }
-        aggiornato.hp = calcolaHPMax(aggiornato)
-        messaggi.push(`✨ ${attivo.nome} si è evoluto in ${nuova.nome}!`)
-      }
+      // Solo log + accumulo. L'evoluzione viene applicata in EvoluzioneScene.
+      messaggi.push(`${attivo.nome} sembra cambiare... (evolverà a fine battaglia)`)
+      setEvoluzioniInAttesa((prev) => [
+        ...prev,
+        {
+          istanzaId: attivo.istanzaId,
+          oldSpecieId: attivo.specieId,
+          newSpecieId: xpRes.evoluzionePendente!.nuovaSpecieId,
+        },
+      ])
     }
     if (messaggi.length > 0) setLog((l) => [...l, ...messaggi])
-    return aggiornato
+    return xpRes.istanza
   }
 
   const eseguiMossa = (numeroMossa: 0 | 1 | 2) => {
     if (terminata || !turnoA) return
-    const ris = calcolaDanno(pkmnA, pkmnB, numeroMossa)
+
+    // Risoluzione stato a inizio turno (avvelenamento/sonno/confusione)
+    const statoRes = risolviStatoInizioTurno(pkmnA, hpMaxA)
+    if (statoRes.messaggi.length > 0) setLog((l) => [...l, ...statoRes.messaggi])
+    const pkmnAEffettivo = statoRes.istanza
+    setPkmnA(pkmnAEffettivo)
+    setSquadraA((sq) => updateInSquadra(sq, pkmnAEffettivo))
+
+    if (pkmnAEffettivo.hp <= 0) {
+      // Avvelenamento o auto-danno confusione ha ucciso pokemonA
+      const nextA = squadraA.find(
+        (p) => p.istanzaId !== pkmnAEffettivo.istanzaId && p.hp > 0
+      )
+      if (nextA) {
+        setLog((l) => [...l, `${pkmnAEffettivo.nome} è caduto! Mandi in campo ${nextA.nome}!`])
+        setPkmnA(nextA)
+        return
+      }
+      setLog((l) => [...l, 'Hai perso la battaglia...'])
+      setEsito('sconfitta')
+      setTerminata(true)
+      return
+    }
+
+    if (!statoRes.puoAgire) {
+      // Turno saltato: passa all'avversario
+      setTurnoA(false)
+      setTimeout(() => turnoAvversario(pkmnB), 1200)
+      return
+    }
+
+    const ris = calcolaDanno(pkmnAEffettivo, pkmnB, numeroMossa)
     if (!ris) return
 
     setShaking('B')
-    const nuovoB = { ...pkmnB, hp: Math.max(0, pkmnB.hp - ris.dannoFinale) }
+    let nuovoB = { ...pkmnB, hp: Math.max(0, pkmnB.hp - ris.dannoFinale) }
+    if (ris.statoApplicato && nuovoB.hp > 0) {
+      nuovoB = applicaStato(nuovoB, ris.statoApplicato)
+    }
     setPkmnB(nuovoB)
     const nuovaSquadraB = updateInSquadra(squadraB, nuovoB)
     setSquadraB(nuovaSquadraB)
@@ -188,14 +240,50 @@ export function BattagliaScene() {
   }
 
   const turnoAvversario = (statoBcorrente: PokemonIstanza) => {
-    const mossa = scegliMossaIA(statoBcorrente, pkmnA)
-    const ris = calcolaDanno(statoBcorrente, pkmnA, mossa)
+    // Risoluzione stato dell'avversario a inizio turno
+    const hpMaxBcorrente = calcolaHPMax(statoBcorrente)
+    const statoRes = risolviStatoInizioTurno(statoBcorrente, hpMaxBcorrente)
+    if (statoRes.messaggi.length > 0) setLog((l) => [...l, ...statoRes.messaggi])
+    const bEffettivo = statoRes.istanza
+    setPkmnB(bEffettivo)
+    setSquadraB((sq) => updateInSquadra(sq, bEffettivo))
+
+    if (bEffettivo.hp <= 0) {
+      const nextB = squadraB.find(
+        (p) => p.istanzaId !== bEffettivo.istanzaId && p.hp > 0
+      )
+      if (nextB && isNPC) {
+        setLog((l) => [...l, `${bEffettivo.nome} è caduto! L'avversario manda in campo ${nextB.nome}!`])
+        setPkmnB(nextB)
+        setTurnoA(true)
+        return
+      }
+      // Vittoria del giocatore via danno da stato
+      const aggiornatoA = premiaConXP(pkmnA, bEffettivo)
+      setPkmnA(aggiornatoA)
+      setSquadraA((sq) => updateInSquadra(sq, aggiornatoA))
+      setLog((l) => [...l, 'Hai vinto la battaglia!'])
+      setEsito('vittoria')
+      setTerminata(true)
+      return
+    }
+
+    if (!statoRes.puoAgire) {
+      setTurnoA(true)
+      return
+    }
+
+    const mossa = scegliMossaIA(bEffettivo, pkmnA)
+    const ris = calcolaDanno(bEffettivo, pkmnA, mossa)
     if (!ris) {
       setTurnoA(true)
       return
     }
     setShaking('A')
-    const nuovoA = { ...pkmnA, hp: Math.max(0, pkmnA.hp - ris.dannoFinale) }
+    let nuovoA = { ...pkmnA, hp: Math.max(0, pkmnA.hp - ris.dannoFinale) }
+    if (ris.statoApplicato && nuovoA.hp > 0) {
+      nuovoA = applicaStato(nuovoA, ris.statoApplicato)
+    }
     setPkmnA(nuovoA)
     const nuovaSquadraA = updateInSquadra(squadraA, nuovoA)
     setSquadraA(nuovaSquadraA)
@@ -203,7 +291,6 @@ export function BattagliaScene() {
     setTimeout(() => setShaking(null), 400)
 
     if (nuovoA.hp <= 0) {
-      // Cerca prossimo pokemon vivo del giocatore
       const nextA = nuovaSquadraA.find(
         (p) => p.istanzaId !== nuovoA.istanzaId && p.hp > 0
       )
@@ -285,14 +372,28 @@ export function BattagliaScene() {
         </motion.button>
       )}
 
-      {/* Esito + monete (solo battaglie NPC) */}
-      {terminata && isNPC && esito && (
-        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 arka-panel px-6 py-3 z-20">
-          <p className="text-yellow-300 font-bold text-center">
-            {esito === 'vittoria' ? '+200₳ guadagnati' : '-200₳ persi'}
-          </p>
-        </div>
-      )}
+      {/* Esito + monete (solo battaglie NPC/Capopalestra) */}
+      {terminata && isNPC && esito && (() => {
+        const allenatore = battaglia?.allenatoreId !== undefined
+          ? getAllenatore(battaglia.allenatoreId)
+          : null
+        const tipoAvv: TipoAvversario =
+          allenatore?.tipo === 'Capopalestra'
+            ? 'Capopalestra'
+            : allenatore?.tipo === 'PVP'
+            ? 'PVP'
+            : 'NPC'
+        const delta = calcolaVariazioneMonete(esito, tipoAvv)
+        if (delta === 0) return null
+        return (
+          <div className="absolute bottom-20 left-1/2 -translate-x-1/2 arka-panel px-6 py-3 z-20">
+            <p className="text-yellow-300 font-bold text-center">
+              {delta > 0 ? `+${delta}₳ guadagnati` : `${delta}₳ persi`}
+              {tipoAvv === 'Capopalestra' && delta > 0 && ' 👑'}
+            </p>
+          </div>
+        )
+      })()}
 
       {/* Pulsante exit */}
       {terminata && (
@@ -369,7 +470,13 @@ function PokemonBattleSlot({
         <span className="text-5xl">{isPlayer ? '🐺' : '🦈'}</span>
       </motion.div>
 
-      <HpBar nome={istanza.nome} livello={istanza.livello} hp={istanza.hp} hpMax={hpMax} />
+      <HpBar
+        nome={istanza.nome}
+        livello={istanza.livello}
+        hp={istanza.hp}
+        hpMax={hpMax}
+        stato={istanza.stato?.tipo}
+      />
     </div>
   )
 }
@@ -379,19 +486,32 @@ function HpBar({
   livello,
   hp,
   hpMax,
+  stato,
 }: {
   nome: string
   livello: number
   hp: number
   hpMax: number
+  stato?: StatoAlterato
 }) {
   const pct = (hp / hpMax) * 100
   const colore = pct > 60 ? 'var(--hp-high)' : pct > 25 ? 'var(--hp-mid)' : 'var(--hp-low)'
+  const badge = stato ? STATO_BADGE[stato] : null
 
   return (
     <div className="arka-panel min-w-[200px] px-3 py-2">
       <div className="flex justify-between items-baseline mb-1">
-        <span className="font-bold text-sm">{nome}</span>
+        <span className="font-bold text-sm flex items-center gap-1.5">
+          {nome}
+          {badge && (
+            <span
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${badge.color} text-white uppercase tracking-wider`}
+              title={stato}
+            >
+              {badge.emoji} {badge.label}
+            </span>
+          )}
+        </span>
         <span className="text-xs text-arka-text-muted">LV. {livello}</span>
       </div>
       <div className="h-3 bg-slate-900 rounded-full overflow-hidden">
