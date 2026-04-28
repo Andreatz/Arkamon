@@ -50,6 +50,10 @@ export function BattagliaScene() {
   const [turnoA, setTurnoA] = useState(true)
   const [shaking, setShaking] = useState<'A' | 'B' | null>(null)
   const [terminata, setTerminata] = useState(false)
+  // Evoluzioni accumulate durante la battaglia: applicate dopo, in EvoluzioneScene
+  const [evoluzioniInAttesa, setEvoluzioniInAttesa] = useState<
+    { istanzaId: string; oldSpecieId: number; newSpecieId: number }[]
+  >([])
 
   useEffect(() => {
     if (battaglia) {
@@ -82,10 +86,20 @@ export function BattagliaScene() {
 
   const tornaIndietro = () => {
     if (isNPC && esito) risolviBattagliaNPC(esito)
-    // Persiste tutte le modifiche (livello, xp, specieId post-evoluzione)
-    // PRIMA di terminaBattaglia (che cura HP a max ma preserva il resto).
+    // Persiste tutte le modifiche (livello, xp). L'evoluzione vera e propria
+    // (cambio di specieId) avviene dopo, nella EvoluzioneScene.
     for (const p of squadraA) aggiornaPokemon(giocatoreAttivo, p)
     terminaBattaglia(true)
+
+    if (evoluzioniInAttesa.length > 0) {
+      vaiAScena('evoluzione', {
+        evoluzioni: evoluzioniInAttesa,
+        luogoRitorno,
+        giocatoreId: giocatoreAttivo,
+      })
+      return
+    }
+
     if (isPercorso) {
       vaiAScena('percorso', { luogo: luogoRitorno })
     } else if (luogoRitorno && luogoRitorno !== 'mappa-principale') {
@@ -102,34 +116,35 @@ export function BattagliaScene() {
   const hpMaxB = calcolaHPMax(pkmnB)
 
   /**
-   * Premia pokemonA con XP per il nemico sconfitto, gestisce level-up
-   * ed evoluzione inline. Ritorna l'istanza aggiornata.
+   * Premia pokemonA con XP per il nemico sconfitto, gestisce level-up.
+   * L'eventuale evoluzione viene accodata in `evoluzioniInAttesa` e
+   * processata dopo la fine della battaglia nella EvoluzioneScene
+   * (NON applicata inline qui, per coerenza con il flusso classico
+   * "vittoria → schermata evoluzione").
    */
   const premiaConXP = (
     attivo: PokemonIstanza,
     sconfitto: PokemonIstanza
   ): PokemonIstanza => {
     const xpRes = applicaXP(attivo, xpGuadagnato(sconfitto))
-    let aggiornato = xpRes.istanza
     const messaggi: string[] = []
     if (xpRes.livelliGuadagnati > 0) {
-      messaggi.push(`${attivo.nome} è salito al livello ${aggiornato.livello}!`)
+      messaggi.push(`${attivo.nome} è salito al livello ${xpRes.istanza.livello}!`)
     }
     if (xpRes.evoluzionePendente) {
-      const nuova = getPokemon(xpRes.evoluzionePendente.nuovaSpecieId)
-      if (nuova) {
-        // Evoluzione inline (la scena dedicata sarà introdotta più avanti)
-        aggiornato = {
-          ...aggiornato,
-          specieId: nuova.id,
-          nome: nuova.nome,
-        }
-        aggiornato.hp = calcolaHPMax(aggiornato)
-        messaggi.push(`✨ ${attivo.nome} si è evoluto in ${nuova.nome}!`)
-      }
+      // Solo log + accumulo. L'evoluzione viene applicata in EvoluzioneScene.
+      messaggi.push(`${attivo.nome} sembra cambiare... (evolverà a fine battaglia)`)
+      setEvoluzioniInAttesa((prev) => [
+        ...prev,
+        {
+          istanzaId: attivo.istanzaId,
+          oldSpecieId: attivo.specieId,
+          newSpecieId: xpRes.evoluzionePendente!.nuovaSpecieId,
+        },
+      ])
     }
     if (messaggi.length > 0) setLog((l) => [...l, ...messaggi])
-    return aggiornato
+    return xpRes.istanza
   }
 
   const eseguiMossa = (numeroMossa: 0 | 1 | 2) => {

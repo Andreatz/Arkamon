@@ -34,6 +34,9 @@ interface GameState {
   // === STATO BATTAGLIA ===
   battaglia: StatoBattaglia | null
 
+  /** ID specie dello starter assegnato al Rivale (quello scartato dai giocatori) */
+  rivaleStarterId: number | null
+
   // === NAVIGAZIONE ===
   scenaCorrente: NavigazioneScena
   scenaPrecedente: NavigazioneScena | null
@@ -74,6 +77,9 @@ interface GameState {
 
   /** Cura tutta la squadra del giocatore (Centro Pokemon) */
   curaSquadra: (giocatoreId: 1 | 2) => void
+
+  /** Assegna lo starter scartato al Rivale (porting di AssegnaRivaleEVaiAllaMappa) */
+  assegnaRivaleStarter: (specieId: number) => void
 
   /** Avvia una nuova battaglia */
   iniziaBattaglia: (battaglia: StatoBattaglia) => void
@@ -119,6 +125,7 @@ export const useGameStore = create<GameState>()(
       giocatore2: giocatoreVuoto(2),
       giocatoreAttivo: 1,
       battaglia: null,
+      rivaleStarterId: null,
       scenaCorrente: { scena: 'titolo' },
       scenaPrecedente: null,
 
@@ -209,10 +216,19 @@ export const useGameStore = create<GameState>()(
         const pokemonA = giocatore.squadra.find((p) => p.hp > 0) ?? giocatore.squadra[0]
         if (!pokemonA) return false
 
+        // Per il Rivale (tipo PVP), il primo slot è lo starter scartato
+        // dai giocatori (porting di AssegnaRivaleEVaiAllaMappa).
+        const isRivale = allenatore.tipo === 'PVP'
+        const slotsAllenatore = allenatore.squadra.map((s, i) =>
+          isRivale && i === 0 && state.rivaleStarterId
+            ? { ...s, pokemonId: state.rivaleStarterId }
+            : s
+        )
+
         // Crea istanze fresche per tutta la squadra dell'allenatore
         const squadraB: PokemonIstanza[] = []
-        for (let i = 0; i < allenatore.squadra.length; i++) {
-          const slot = allenatore.squadra[i]
+        for (let i = 0; i < slotsAllenatore.length; i++) {
+          const slot = slotsAllenatore[i]
           const speci = getPokemon(slot.pokemonId)
           if (!speci) continue
           const ist: PokemonIstanza = {
@@ -282,6 +298,9 @@ export const useGameStore = create<GameState>()(
           return { [chiaveG]: { ...g, squadra: squadraCurata } } as Partial<GameState>
         }),
 
+      // Porting di: AssegnaRivaleEVaiAllaMappa da old_files/Mod_Game_Events.txt
+      assegnaRivaleStarter: (specieId) => set({ rivaleStarterId: specieId }),
+
       iniziaBattaglia: (battaglia) => set({ battaglia }),
 
       aggiornaBattaglia: (patch) =>
@@ -312,6 +331,7 @@ export const useGameStore = create<GameState>()(
           giocatore2: giocatoreVuoto(2),
           giocatoreAttivo: 1,
           battaglia: null,
+          rivaleStarterId: null,
           scenaCorrente: { scena: 'titolo' },
           scenaPrecedente: null,
         }),

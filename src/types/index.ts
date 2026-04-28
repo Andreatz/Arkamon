@@ -196,6 +196,7 @@ export type SceneId =
   | 'battaglia'
   | 'deposito'
   | 'squadra'
+  | 'evoluzione'
 
 export interface NavigazioneScena {
   scena: SceneId
