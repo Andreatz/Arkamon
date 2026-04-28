@@ -89,15 +89,17 @@ Riga = tipo attaccante, colonna = tipo difensore.
 | ATK \ DEF  | Norm | Elet | Fuoc | Terr | Acqu | Erba | Oscu | Psic |
 | ---------- | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
 | Normale    | 1    | 1    | 1    | 1    | 1    | 1    | 1    | 1    |
-| Elettro    | 1    | 1    | 1    | 0.5  | **2**| 1    | 1    | 1    |
-| Fuoco      | 1    | 1    | 1    | 1    | 0.5  | **2**| 1    | 1    |
-| Terra      | 1    | **2**| 1    | 1    | 1    | 0.5  | 1    | 1    |
-| Acqua      | 1    | 0.5  | **2**| **2**| 1    | 1    | 1    | 1    |
-| Erba       | 1    | 1    | 0.5  | 1    | **2**| 1    | 1    | 1    |
-| Oscurità   | 1    | 1    | 1    | 1    | 1    | 1    | 1    | **2**|
-| Psico      | 1    | 1    | 1    | 1    | 1    | 1    | **2**| 1    |
+| Elettro    | 1    | 1    | 1    | 0.5  | **1.5**| 1    | 1    | 1    |
+| Fuoco      | 1    | 1    | 1    | 1    | 0.5  | **1.5**| 1    | 1    |
+| Terra      | 1    | **1.5**| 1    | 1    | 1    | 0.5  | 1    | 1    |
+| Acqua      | 1    | 0.5  | **1.5**| **1.5**| 1    | 1    | 1    | 1    |
+| Erba       | 1    | 1    | 0.5  | 1    | **1.5**| 1    | 1    | 1    |
+| Oscurità   | 1    | 1    | 1    | 1    | 1    | 1    | 1    | **1.5**|
+| Psico      | 1    | 1    | 1    | 1    | 1    | 1    | **1.5**| 1    |
 
-Nessun tipo ha immunità (0×); tutto è 0.5 / 1 / 2.
+Nessun tipo ha immunità (0×); tutto è 0.5 / 1 / 1.5.
+
+> **Nota di bilanciamento**: il prototipo VBA usa **1.5×** per le superefficaci (non il canonico ×2 dei Pokémon). Questo è intenzionale — con il sistema d6 i numeri sono piccoli e 2× sarebbe troppo determinante. Fonte: `old_files/Database.xlsx` foglio `Tipi`.
 
 ### Calcolo HP massimi
 ```
