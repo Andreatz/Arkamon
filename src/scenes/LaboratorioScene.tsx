@@ -16,6 +16,7 @@ export function LaboratorioScene() {
   const vaiAScena = useGameStore((s) => s.vaiAScena)
   const aggiungiPokemon = useGameStore((s) => s.aggiungiPokemon)
   const cambiaGiocatoreAttivo = useGameStore((s) => s.cambiaGiocatoreAttivo)
+  const assegnaRivaleStarter = useGameStore((s) => s.assegnaRivaleStarter)
   const giocatoreAttivo = useGameStore((s) => s.giocatoreAttivo)
   const g1HaStarter = useGameStore((s) => s.giocatore1.squadra.length > 0)
   const g2HaStarter = useGameStore((s) => s.giocatore2.squadra.length > 0)
@@ -27,9 +28,12 @@ export function LaboratorioScene() {
     const istanza = creaIstanza(specieId, 5)
     if (!istanza) return
     aggiungiPokemon(giocatoreAttivo, istanza)
-    setStarterDisponibili((prev) => prev.filter((id) => id !== specieId))
+    const rimanenti = starterDisponibili.filter((id) => id !== specieId)
+    setStarterDisponibili(rimanenti)
     if (g1HaStarter && !g2HaStarter) {
-      // Era il turno del 2: ora vanno tutti alla mappa
+      // Era il turno del 2: lo starter rimasto va al Rivale.
+      // Porting di: AssegnaRivaleEVaiAllaMappa da old_files/Mod_Game_Events.txt
+      if (rimanenti.length === 1) assegnaRivaleStarter(rimanenti[0])
       setTimeout(() => vaiAScena('mappa-principale'), 800)
     } else {
       cambiaGiocatoreAttivo()
