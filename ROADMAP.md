@@ -9,7 +9,7 @@
 | --- | --- |
 | Branch principale | `main` (tutte le PR Fase A + stati alterati mergiate) |
 | Ultimo commit | `7673233` fix(battaglia): import StatoAlterato/STATO_BADGE |
-| Test (`npm test`) | **73/73 verdi** |
+| Test (`npm test`) | **80/80 verdi** |
 | Type check (`tsc --noEmit`) | clean |
 | Build (`npm run build`) | clean (566 KB / 115 KB gzip; warning chunk > 500 KB non bloccante) |
 | Loop end-to-end giocabile | ✅ titolo → laboratorio → mappa (28 luoghi) → percorso/città → battaglia (NPC/Capo/selvatica multi-pokemon con cattura/XP/evoluzione) → ritorno · deposito accessibile dalla mappa |
@@ -130,6 +130,8 @@ Tutti NPC `tipo: "NPC"` (+200₳/-200₳, niente capipalestra fuori dal pool uff
 
 - ✅ **Stati alterati**: Confusione / Sonno / Avvelenamento — engine + UI + 6 mosse trigger nei dati (Fase B chiusa)
 - ✅ **Mosse di cura HP**: helper `applicaMossaCura` + integrazione `BattagliaScene` (player+AI) + 4 mosse `CURA_PCT` popolate (Tocco di pace 50%, Risveglio verde 40%, Respiro profondo 30%, Assorbilinfa 25%). AI ricorre alla cura se HP ≤ 30%.
+- ✅ **Mossa Suprema**: `èMossaSuprema` + `autodannoSuprema` + ×2 al danno + autodanno % di hpMax. Integrato in `BattagliaScene` (gestisce auto-KO con switch o sconfitta, lato player+AI). 3 mosse `SUPREMA` popolate (Cannone Infernale, Ordine sovrano, Vortice divino — tutte autodanno 50%). AI evita la suprema se HP < pct + 5%.
+- ✅ **Oggetti / Masterball**: nuovo tipo `OggettoId`, campo `inventario` in `StatoGiocatore`, action store `usaOggetto`/`aggiungiOggetto`, default 1 Masterball per giocatore. Pulsante "💎 Masterball ×N" in `BattagliaScene` (solo selvatica) con cattura garantita 100%. Migrazione safe per save preesistenti via `merge` con fallback.
 - ⏭️ **Mossa Suprema**: ×2 danno + autodanno 50% HP max
 - ⏭️ **Oggetti**: Masterball (cattura 100%), pozioni, etc.
 - ⏭️ **Pulsante switch turno A↔B esplicito** (oggi auto)
@@ -164,8 +166,9 @@ Tutti NPC `tipo: "NPC"` (+200₳/-200₳, niente capipalestra fuori dal pool uff
 | `src/engine/__tests__/encounters.test.ts` | 8 | pesoCategoria + scegliIncontroPesato (deterministico via RNG iniettabile) |
 | `src/engine/__tests__/stati.test.ts` | 12 | applicaStato (durate) + risolviStatoInizioTurno (no-stato, veleno con clamp, sonno sveglia/saltato/cleared, confusione self-hit/agisce/cleared) |
 | `src/engine/__tests__/cura.test.ts` | 10 | èMossaCura + applicaMossaCura (CURA piatta, CURA_PCT, clamp hpMax, HP pieni, no-op, AI smoke) |
+| `src/engine/__tests__/suprema.test.ts` | 7 | èMossaSuprema, autodannoSuprema (default 50%, % custom, clamp min 1, no-op), AI smoke |
 | `src/engine/__tests__/deposito.test.ts` | 12 | scambia() (no-op, swap squadra↔dep + dep↔dep + squadra↔squadra, move con compattazione/append, squadra piena, immutabilità) |
-| **Totale** | **73** | tutto verde |
+| **Totale** | **80** | tutto verde |
 
 I test coprono solo l'engine puro. Le scene React non hanno test automatici — verifica manuale via `npm run dev`.
 
@@ -188,9 +191,9 @@ I test coprono solo l'engine puro. Le scene React non hanno test automatici — 
 
 1. **Bilanciamento + polish** (variabile) — playthrough completo, tuning di livelli/monete/cespugli.
 2. **PvP esplicito** (M) — utile solo se vuoi un'esperienza locale a 2 giocatori reali.
-3. **Mossa Suprema + Oggetti** (M) — Fase B residua.
-4. **Sprite reali + sfondo mappa** (variabile, asset-pesante) — Fase C polish visivo.
-5. **Deploy GitHub Pages + Tauri** (S+M) — Fase D, solo quando il gameplay è solido.
+3. **Sprite reali + sfondo mappa** (variabile, asset-pesante) — Fase C polish visivo.
+4. **Deploy GitHub Pages + Tauri** (S+M) — Fase D, solo quando il gameplay è solido.
+5. **Pulsante switch turno A↔B esplicito** — l'unica voce residua di Fase B (oggi auto). Bassa priorità.
 
 Nota: la voce "Mosse di cura HP" è stata chiusa (Fase B). AI ricorre alla cura solo se HP ≤ 30%; lato player la cura consuma il turno e non infligge danno.
 

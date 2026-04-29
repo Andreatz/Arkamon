@@ -126,6 +126,9 @@ export interface PokemonIstanza {
   stato?: Stato
 }
 
+/** Identificatori degli oggetti supportati. */
+export type OggettoId = 'masterball'
+
 /** Stato di un singolo giocatore */
 export interface StatoGiocatore {
   id: 1 | 2
@@ -139,6 +142,8 @@ export interface StatoGiocatore {
   allenatoriSconfitti: Set<number>
   /** Monete possedute (porting di Stato_Giocatore.Monete del VBA) */
   monete: number
+  /** Inventario oggetti (id → quantità). 0 o assente = nessuno. */
+  inventario: Partial<Record<OggettoId, number>>
 }
 
 /** Stato della battaglia in corso (analogo del foglio Battaglia_Corrente VBA) */
@@ -179,6 +184,8 @@ export interface RisultatoMossa {
   messaggi: string[]
   /** Stato alterato innescato sul difensore (se la mossa ha effetto e il roll è passato) */
   statoApplicato?: StatoAlterato
+  /** Autodanno subito dall'attaccante (es. mossa Suprema). 0/undefined se nessuno. */
+  autodanno?: number
 }
 
 // =============================================================

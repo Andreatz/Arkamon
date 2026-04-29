@@ -21521,8 +21521,8 @@
     "id": 107,
     "nome": "Vortice divino",
     "tipo": "Acqua",
-    "effetto": null,
-    "valoreEffetto": null,
+    "effetto": "SUPREMA",
+    "valoreEffetto": 50,
     "dadiPerLivello": {
       "5": 1,
       "6": 1,
@@ -22130,8 +22130,8 @@
     "id": 110,
     "nome": "Ordine sovrano",
     "tipo": "Oscurità",
-    "effetto": null,
-    "valoreEffetto": null,
+    "effetto": "SUPREMA",
+    "valoreEffetto": 50,
     "dadiPerLivello": {
       "5": 1,
       "6": 1,
@@ -35122,8 +35122,8 @@
     "id": 174,
     "nome": "Cannone Infernale",
     "tipo": "Fuoco",
-    "effetto": null,
-    "valoreEffetto": null,
+    "effetto": "SUPREMA",
+    "valoreEffetto": 50,
     "dadiPerLivello": {
       "5": 0,
       "6": 0,

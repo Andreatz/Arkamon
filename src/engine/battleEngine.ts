@@ -202,15 +202,28 @@ export function calcolaDanno(
   const stab = mossa.tipo === specieAtt.tipo
   const moltStab = stab ? BATTLE_CONSTANTS.STAB_MULTIPLIER : 1
   const moltTipo = efficaciaTipo(mossa.tipo, specieDif.tipo)
+  const moltSuprema = èMossaSuprema(mossa) ? 2 : 1
 
-  const dannoFinale = Math.max(1, roundHalfUp(dannoBase * moltStab * moltTipo))
+  const dannoFinale = Math.max(
+    1,
+    roundHalfUp(dannoBase * moltStab * moltTipo * moltSuprema)
+  )
 
   const messaggi: string[] = [`${attaccante.nome} usa ${mossa.nome}!`]
+  if (èMossaSuprema(mossa)) messaggi.push('💥 MOSSA SUPREMA! 💥')
   if (stab) messaggi.push('(STAB)')
   if (moltTipo > 1) messaggi.push('È superefficace!')
   else if (moltTipo < 1 && moltTipo > 0) messaggi.push('Non è molto efficace...')
   else if (moltTipo === 0) messaggi.push('Non ha effetto!')
   messaggi.push(`${difensore.nome} subisce ${dannoFinale} danni.`)
+
+  // Autodanno per mosse supreme: l'attaccante perde una % di hpMax
+  let autodanno = 0
+  if (èMossaSuprema(mossa)) {
+    const hpMaxAtt = calcolaHPMax(attaccante)
+    autodanno = autodannoSuprema(mossa, hpMaxAtt)
+    messaggi.push(`${attaccante.nome} si scarica e perde ${autodanno} HP!`)
+  }
 
   const difensoreSvenuto = difensore.hp - dannoFinale <= 0
   if (difensoreSvenuto) messaggi.push(`${difensore.nome} non può più combattere!`)
@@ -246,7 +259,31 @@ export function calcolaDanno(
     difensoreSvenuto,
     messaggi,
     statoApplicato,
+    autodanno,
   }
+}
+
+// =============================================================
+// MOSSA SUPREMA (Fase B)
+// =============================================================
+//
+// Una "mossa suprema" infligge danno doppio al difensore ma fa anche
+// subire all'attaccante un autodanno pari al `valoreEffetto`% del suo
+// hpMax (default 50% se valoreEffetto è null).
+
+/** True se la mossa è classificata Suprema. */
+export function èMossaSuprema(mossa: MossaDef): boolean {
+  return mossa.effetto === 'SUPREMA'
+}
+
+/** Calcola l'autodanno della mossa suprema. Min 1. */
+export function autodannoSuprema(
+  mossa: MossaDef,
+  hpMaxAttaccante: number
+): number {
+  if (!èMossaSuprema(mossa)) return 0
+  const pct = mossa.valoreEffetto ?? 50
+  return Math.max(1, Math.floor((hpMaxAttaccante * pct) / 100))
 }
 
 // =============================================================
@@ -359,6 +396,11 @@ export function scegliMossaIA(
     punteggio *= efficaciaTipo(mossa.tipo, specieDif.tipo)
     if (mossa.effetto && EFFETTI_CURA.has(mossa.effetto)) {
       punteggio = hpRatio <= 0.3 ? 100 : -1
+    }
+    if (èMossaSuprema(mossa)) {
+      // Usa la suprema solo se ha HP sufficienti per non auto-KO
+      const pctAuto = (mossa.valoreEffetto ?? 50) / 100
+      punteggio = hpRatio > pctAuto + 0.05 ? punteggio * 2 : -1
     }
 
     if (punteggio > punteggioMax) {

@@ -14,6 +14,7 @@ import type {
   PokemonIstanza,
   NavigazioneScena,
   SceneId,
+  OggettoId,
 } from '@/types'
 import {
   calcolaHPMax,
@@ -70,6 +71,12 @@ interface GameState {
   /** Aggiunge (o sottrae se delta < 0) monete al giocatore, non scende sotto 0 */
   aggiornaMonete: (giocatoreId: 1 | 2, delta: number) => void
 
+  /** Decrementa di 1 la quantità dell'oggetto. Ritorna true se consumato. */
+  usaOggetto: (giocatoreId: 1 | 2, oggettoId: OggettoId) => boolean
+
+  /** Aggiunge (o crea) `delta` unità di un oggetto. */
+  aggiungiOggetto: (giocatoreId: 1 | 2, oggettoId: OggettoId, delta: number) => void
+
   /** Avvia una battaglia contro un allenatore NPC. Ritorna false se non avviabile */
   iniziaBattagliaNPC: (allenatoreId: number, luogoRitorno: string) => boolean
 
@@ -105,6 +112,8 @@ const giocatoreVuoto = (id: 1 | 2): StatoGiocatore => ({
   cespugliVisitati: new Set(),
   allenatoriSconfitti: new Set(),
   monete: 0,
+  // Inventario di partenza: 1 Masterball per la cattura garantita di un leggendario
+  inventario: { masterball: 1 },
 })
 
 /**
@@ -204,6 +213,34 @@ export const useGameStore = create<GameState>()(
           const g = s[chiaveG]
           return {
             [chiaveG]: { ...g, monete: Math.max(0, g.monete + delta) },
+          } as Partial<GameState>
+        }),
+
+      usaOggetto: (giocatoreId, oggettoId) => {
+        const state = get()
+        const chiaveG = giocatoreId === 1 ? 'giocatore1' : 'giocatore2'
+        const g = state[chiaveG]
+        const q = g.inventario[oggettoId] ?? 0
+        if (q <= 0) return false
+        set({
+          [chiaveG]: {
+            ...g,
+            inventario: { ...g.inventario, [oggettoId]: q - 1 },
+          },
+        } as Partial<GameState>)
+        return true
+      },
+
+      aggiungiOggetto: (giocatoreId, oggettoId, delta) =>
+        set((s) => {
+          const chiaveG = giocatoreId === 1 ? 'giocatore1' : 'giocatore2'
+          const g = s[chiaveG]
+          const q = g.inventario[oggettoId] ?? 0
+          return {
+            [chiaveG]: {
+              ...g,
+              inventario: { ...g.inventario, [oggettoId]: Math.max(0, q + delta) },
+            },
           } as Partial<GameState>
         }),
 
@@ -375,8 +412,11 @@ export const useGameStore = create<GameState>()(
         },
       }) as unknown as GameState,
       merge: (persisted, current) => {
-        // Riconverti gli array in Set dopo il caricamento
+        // Riconverti gli array in Set dopo il caricamento.
+        // Per le save pre-inventario: fallback a inventario di default.
         const p = persisted as GameState
+        const inv = (g: StatoGiocatore) =>
+          g.inventario ?? { masterball: 1 }
         return {
           ...current,
           ...p,
@@ -384,11 +424,13 @@ export const useGameStore = create<GameState>()(
             ...p.giocatore1,
             cespugliVisitati: new Set(p.giocatore1.cespugliVisitati as unknown as string[]),
             allenatoriSconfitti: new Set(p.giocatore1.allenatoriSconfitti as unknown as number[]),
+            inventario: inv(p.giocatore1),
           },
           giocatore2: {
             ...p.giocatore2,
             cespugliVisitati: new Set(p.giocatore2.cespugliVisitati as unknown as string[]),
             allenatoriSconfitti: new Set(p.giocatore2.allenatoriSconfitti as unknown as number[]),
+            inventario: inv(p.giocatore2),
           },
         }
       },

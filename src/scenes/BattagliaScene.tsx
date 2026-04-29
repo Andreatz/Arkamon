@@ -43,6 +43,12 @@ export function BattagliaScene() {
   const aggiornaPokemon = useGameStore((s) => s.aggiornaPokemon)
   const giocatoreAttivo = useGameStore((s) => s.giocatoreAttivo)
   const risolviBattagliaNPC = useGameStore((s) => s.risolviBattagliaNPC)
+  const usaOggetto = useGameStore((s) => s.usaOggetto)
+  const masterballRimaste = useGameStore((s) =>
+    s.giocatoreAttivo === 1
+      ? s.giocatore1.inventario.masterball ?? 0
+      : s.giocatore2.inventario.masterball ?? 0
+  )
   const [esito, setEsito] = useState<'vittoria' | 'sconfitta' | null>(null)
 
   const [pkmnA, setPkmnA] = useState<PokemonIstanza | null>(null)
@@ -212,9 +218,20 @@ export function BattagliaScene() {
 
     setTimeout(() => setShaking(null), 400)
 
+    // Autodanno mossa Suprema sull'attaccante (può auto-KO)
+    let aDopoAutodanno = pkmnAEffettivo
+    if (ris.autodanno && ris.autodanno > 0) {
+      aDopoAutodanno = {
+        ...pkmnAEffettivo,
+        hp: Math.max(0, pkmnAEffettivo.hp - ris.autodanno),
+      }
+      setPkmnA(aDopoAutodanno)
+      setSquadraA((sq) => updateInSquadra(sq, aDopoAutodanno))
+    }
+
     if (nuovoB.hp <= 0) {
       // XP a pokemonA per il KO (regola: 1 nemico = 1 xp = 1 livello)
-      const aggiornatoA = premiaConXP(pkmnA, nuovoB)
+      const aggiornatoA = premiaConXP(aDopoAutodanno, nuovoB)
       setPkmnA(aggiornatoA)
       setSquadraA((sq) => updateInSquadra(sq, aggiornatoA))
 
@@ -231,6 +248,28 @@ export function BattagliaScene() {
       // Nessun altro avversario → vittoria
       setLog((l) => [...l, 'Hai vinto la battaglia!'])
       setEsito('vittoria')
+      setTerminata(true)
+      return
+    }
+
+    // Auto-KO da mossa Suprema: gestisci switch o sconfitta
+    if (aDopoAutodanno.hp <= 0) {
+      const nextA = squadraA.find(
+        (p) => p.istanzaId !== aDopoAutodanno.istanzaId && p.hp > 0
+      )
+      if (nextA) {
+        setLog((l) => [
+          ...l,
+          `${aDopoAutodanno.nome} è esausto! Mandi in campo ${nextA.nome}!`,
+        ])
+        setPkmnA(nextA)
+        // Turno passa comunque all'avversario (la mossa è stata usata)
+        setTurnoA(false)
+        setTimeout(() => turnoAvversario(nuovoB), 1500)
+        return
+      }
+      setLog((l) => [...l, 'Hai perso la battaglia...'])
+      setEsito('sconfitta')
       setTerminata(true)
       return
     }
@@ -259,6 +298,20 @@ export function BattagliaScene() {
     // Cattura fallita = il turno è perso → tocca al selvatico
     setTurnoA(false)
     setTimeout(() => turnoAvversario(pkmnB), 1500)
+  }
+
+  /** Cattura garantita al 100% via Masterball (consuma 1 oggetto). */
+  const eseguiMasterball = () => {
+    if (terminata || !turnoA) return
+    if (!usaOggetto(giocatoreAttivo, 'masterball')) return
+    setLog((l) => [
+      ...l,
+      `Lanci una Masterball... 💎`,
+      `${pkmnB.nome} è stato catturato!`,
+    ])
+    aggiungiPokemon(giocatoreAttivo, pkmnB)
+    setEsito('vittoria')
+    setTerminata(true)
   }
 
   const turnoAvversario = (statoBcorrente: PokemonIstanza) => {
@@ -326,6 +379,17 @@ export function BattagliaScene() {
     setLog((l) => [...l, ...ris.messaggi])
     setTimeout(() => setShaking(null), 400)
 
+    // Autodanno mossa Suprema lato AI
+    let bDopoAutodanno = bEffettivo
+    if (ris.autodanno && ris.autodanno > 0) {
+      bDopoAutodanno = {
+        ...bEffettivo,
+        hp: Math.max(0, bEffettivo.hp - ris.autodanno),
+      }
+      setPkmnB(bDopoAutodanno)
+      setSquadraB((sq) => updateInSquadra(sq, bDopoAutodanno))
+    }
+
     if (nuovoA.hp <= 0) {
       const nextA = nuovaSquadraA.find(
         (p) => p.istanzaId !== nuovoA.istanzaId && p.hp > 0
@@ -342,9 +406,33 @@ export function BattagliaScene() {
       setLog((l) => [...l, 'Hai perso la battaglia...'])
       setEsito('sconfitta')
       setTerminata(true)
-    } else {
-      setTurnoA(true)
+      return
     }
+
+    // Auto-KO lato AI da mossa Suprema
+    if (bDopoAutodanno.hp <= 0) {
+      const nextB = squadraB.find(
+        (p) => p.istanzaId !== bDopoAutodanno.istanzaId && p.hp > 0
+      )
+      if (nextB && isNPC) {
+        setLog((l) => [
+          ...l,
+          `${bDopoAutodanno.nome} è esausto! L'avversario manda in campo ${nextB.nome}!`,
+        ])
+        setPkmnB(nextB)
+        setTurnoA(true)
+        return
+      }
+      const aggiornatoA = premiaConXP(nuovoA, bDopoAutodanno)
+      setPkmnA(aggiornatoA)
+      setSquadraA((sq) => updateInSquadra(sq, aggiornatoA))
+      setLog((l) => [...l, 'Hai vinto la battaglia!'])
+      setEsito('vittoria')
+      setTerminata(true)
+      return
+    }
+
+    setTurnoA(true)
   }
 
   return (
@@ -395,17 +483,31 @@ export function BattagliaScene() {
         })}
       </div>
 
-      {/* Pulsante cattura (solo battaglie selvatiche) */}
+      {/* Pulsanti cattura (solo battaglie selvatiche) */}
       {isSelvatico && !terminata && battaglia && (
-        <motion.button
-          whileHover={turnoA ? { scale: 1.05 } : {}}
-          whileTap={turnoA ? { scale: 0.95 } : {}}
-          disabled={!turnoA}
-          onClick={eseguiCattura}
-          className="arka-button absolute bottom-4 left-1/2 -translate-x-1/2 z-20 disabled:opacity-50"
-        >
-          🟡 Cattura
-        </motion.button>
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
+          <motion.button
+            whileHover={turnoA ? { scale: 1.05 } : {}}
+            whileTap={turnoA ? { scale: 0.95 } : {}}
+            disabled={!turnoA}
+            onClick={eseguiCattura}
+            className="arka-button disabled:opacity-50"
+          >
+            🟡 Cattura
+          </motion.button>
+          {masterballRimaste > 0 && (
+            <motion.button
+              whileHover={turnoA ? { scale: 1.05 } : {}}
+              whileTap={turnoA ? { scale: 0.95 } : {}}
+              disabled={!turnoA}
+              onClick={eseguiMasterball}
+              className="arka-button disabled:opacity-50"
+              title="Cattura garantita al 100%"
+            >
+              💎 Masterball ×{masterballRimaste}
+            </motion.button>
+          )}
+        </div>
       )}
 
       {/* Esito + monete (solo battaglie NPC/Capopalestra) */}
