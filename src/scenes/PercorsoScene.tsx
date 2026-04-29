@@ -4,6 +4,7 @@ import { generaIncontroDaCespuglio } from '@engine/encounters'
 import { calcolaHPMax } from '@engine/battleEngine'
 import { motion } from 'framer-motion'
 import type { StatoBattaglia } from '@/types'
+import { getBackground } from '@data/backgrounds'
 
 const CESPUGLI = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const
 
@@ -53,8 +54,13 @@ export function PercorsoScene() {
     vaiAScena('battaglia')
   }
 
+  const bg = getBackground(luogo)
+
   return (
-    <div className="w-full h-full flex flex-col bg-gradient-to-b from-emerald-900 via-emerald-700 to-amber-700 p-6">
+    <div
+      className="w-full h-full flex flex-col bg-gradient-to-b from-emerald-900 via-emerald-700 to-amber-700 p-6 bg-cover bg-center"
+      style={bg ? { backgroundImage: `url(${bg})` } : undefined}
+    >
       <div className="flex justify-between items-center mb-4">
         <button
           className="arka-button-secondary text-sm py-2 px-4"

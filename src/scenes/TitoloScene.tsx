@@ -13,14 +13,18 @@ export function TitoloScene() {
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-arka-bg via-slate-900 to-purple-950">
-      <motion.h1
-        className="text-7xl font-black text-arka-accent mb-4 tracking-wider"
+      <motion.img
+        src="/ui/logo_arkamon.png"
+        alt="Arkamon"
+        className="w-96 max-w-[80%] mb-4 drop-shadow-2xl"
         initial={{ y: -50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2, type: 'spring' }}
-      >
-        ARKAMON
-      </motion.h1>
+        onError={(e) => {
+          ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+        }}
+      />
+      <h1 className="sr-only">ARKAMON</h1>
       <motion.p
         className="text-arka-text-muted mb-12 text-lg italic"
         initial={{ opacity: 0 }}

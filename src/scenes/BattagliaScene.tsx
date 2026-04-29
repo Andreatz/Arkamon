@@ -16,6 +16,7 @@ import {
 import { getPokemon, getMossa, getAllenatore } from '@data/index'
 import { calcolaVariazioneMonete, type TipoAvversario } from '@engine/battleEngine'
 import type { PokemonIstanza, MossaDef, StatoAlterato } from '@/types'
+import { getBackground, BATTLE_BG_DEFAULT } from '@data/backgrounds'
 
 const STATO_BADGE: Record<StatoAlterato, { label: string; color: string; emoji: string }> = {
   Confuso: { label: 'CONF', color: 'bg-fuchsia-500', emoji: '💫' },
@@ -470,8 +471,13 @@ export function BattagliaScene() {
     setTurnoA(true)
   }
 
+  const bgBattaglia = getBackground(luogoRitorno) ?? BATTLE_BG_DEFAULT
+
   return (
-    <div className="w-full h-full relative bg-gradient-to-b from-emerald-900 via-emerald-700 to-emerald-500">
+    <div
+      className="w-full h-full relative bg-cover bg-center"
+      style={{ backgroundImage: `url(${bgBattaglia})` }}
+    >
       {/* Indicatore squadra (solo NPC) */}
       {isNPC && (
         <>
@@ -661,15 +667,35 @@ function PokemonBattleSlot({
 }) {
   const isPlayer = position === 'bottom-left'
   const posClass = isPlayer ? 'bottom-32 left-12 flex-row' : 'top-12 right-12 flex-row-reverse'
+  // Vista posteriore per il giocatore (visto da dietro), frontale per l'avversario.
+  const spriteFolder = isPlayer ? 'back_sprites' : 'front_sprites'
+  const spriteSrc = `/sprites/${spriteFolder}/${istanza.specieId}.png`
 
   return (
     <div className={`absolute ${posClass} flex items-center gap-4 z-10`}>
       <motion.div
         animate={shaking ? { x: [0, -8, 8, -8, 8, 0] } : {}}
         transition={{ duration: 0.4 }}
-        className="w-32 h-32 rounded-full bg-arka-surface border-4 border-white shadow-2xl flex items-center justify-center"
+        className="w-40 h-40 flex items-center justify-center drop-shadow-2xl"
       >
-        <span className="text-5xl">{isPlayer ? '🐺' : '🦈'}</span>
+        <img
+          src={spriteSrc}
+          alt={istanza.nome}
+          className="w-full h-full object-contain pixelated"
+          style={{ imageRendering: 'pixelated' }}
+          onError={(e) => {
+            // Fallback emoji se lo sprite non esiste
+            ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+            const sib = e.currentTarget.nextElementSibling as HTMLElement | null
+            if (sib) sib.style.display = 'flex'
+          }}
+        />
+        <span
+          className="text-5xl items-center justify-center w-full h-full rounded-full bg-arka-surface border-4 border-white"
+          style={{ display: 'none' }}
+        >
+          {isPlayer ? '🐺' : '🦈'}
+        </span>
       </motion.div>
 
       <HpBar

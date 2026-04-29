@@ -3,6 +3,7 @@ import { getPokemon } from '@data/index'
 import { calcolaHPMax } from '@engine/battleEngine'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
+import { EVOLUTION_BG } from '@data/backgrounds'
 
 /**
  * Scena Evoluzione: animazione per ogni Pokémon che ha raggiunto la
@@ -101,7 +102,10 @@ export function EvoluzioneScene() {
   }
 
   return (
-    <div className="w-full h-full relative bg-gradient-to-br from-violet-950 via-fuchsia-900 to-indigo-950 flex flex-col items-center justify-center overflow-hidden">
+    <div
+      className="w-full h-full relative bg-gradient-to-br from-violet-950 via-fuchsia-900 to-indigo-950 flex flex-col items-center justify-center overflow-hidden bg-cover bg-center"
+      style={{ backgroundImage: `url(${EVOLUTION_BG})` }}
+    >
       {/* Sfondo a stelline animate */}
       <div className="absolute inset-0 opacity-30">
         {Array.from({ length: 30 }).map((_, i) => (
@@ -141,9 +145,9 @@ export function EvoluzioneScene() {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="w-48 h-48 rounded-full bg-arka-surface border-4 border-white shadow-2xl flex items-center justify-center"
+              className="w-48 h-48 rounded-full bg-arka-surface border-4 border-white shadow-2xl flex items-center justify-center overflow-hidden"
             >
-              <span className="text-8xl">{spriteFor(oldSpec.tipo)}</span>
+              <SpriteOrEmoji specieId={oldSpec.id} fallback={spriteFor(oldSpec.tipo)} />
             </motion.div>
           )}
           {fase === 'morphing' && (
@@ -172,9 +176,9 @@ export function EvoluzioneScene() {
               initial={{ opacity: 0, scale: 1.5 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, type: 'spring' }}
-              className="w-48 h-48 rounded-full bg-arka-surface border-4 border-yellow-400 shadow-2xl flex items-center justify-center"
+              className="w-48 h-48 rounded-full bg-arka-surface border-4 border-yellow-400 shadow-2xl flex items-center justify-center overflow-hidden"
             >
-              <span className="text-8xl">{spriteFor(newSpec.tipo)}</span>
+              <SpriteOrEmoji specieId={newSpec.id} fallback={spriteFor(newSpec.tipo)} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -216,6 +220,33 @@ export function EvoluzioneScene() {
         )}
       </div>
     </div>
+  )
+}
+
+function SpriteOrEmoji({
+  specieId,
+  fallback,
+}: {
+  specieId: number
+  fallback: string
+}) {
+  return (
+    <>
+      <img
+        src={`/sprites/front_sprites/${specieId}.png`}
+        alt=""
+        className="w-full h-full object-contain"
+        style={{ imageRendering: 'pixelated' }}
+        onError={(e) => {
+          ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+          const sib = e.currentTarget.nextElementSibling as HTMLElement | null
+          if (sib) sib.style.display = 'inline'
+        }}
+      />
+      <span className="text-8xl" style={{ display: 'none' }}>
+        {fallback}
+      </span>
+    </>
   )
 }
 

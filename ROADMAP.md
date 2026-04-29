@@ -148,8 +148,8 @@ Tutti NPC `tipo: "NPC"` (+200₳/-200₳, niente capipalestra fuori dal pool uff
 - ⏭️ Musica di sottofondo per scena
 - ⏭️ Animazioni (entrata Pokémon, evoluzione più ricca, KO)
 - ⏭️ Bilanciamento contenuti (livelli allenatori, distribuzione cespugli, economia monete)
-- ⏭️ Sostituire emoji 🐺/🦈/🔥/💧 con sprite reali (immagini da `public/sprites/`)
-- ⏭️ Sfondo Italia stilizzata in `MappaPrincipaleScene` (immagine vera, non gradiente)
+- ✅ **Sprite reali**: sostituite le emoji 🐺/🦈/🔥/💧 con sprite veri da `public/sprites/{front,back}_sprites/{id}.png`. Battaglia (back per giocatore, front per avversario), Laboratorio (selezione starter), Evoluzione (pre/post), Deposito (slot squadra + box). Fallback emoji su `onError` se uno sprite manca.
+- ✅ **Sfondi reali**: nuovo `src/data/backgrounds.ts` con mapping luogo→file. Mappa principale (`Mappa-Finale.jpg`), Percorso/Città (28 luoghi mappati), Battaglia (sfondo del luogo di provenienza, fallback `battle_forest.jpg`), Laboratorio, Deposito, Evoluzione. Logo `logo_arkamon.png` nel TitoloScene.
 - ⏭️ Code-splitting del bundle (chunk attuale > 500 KB; framer-motion separabile via `manualChunks`)
 
 ---
@@ -194,9 +194,10 @@ I test coprono solo l'engine puro. Le scene React non hanno test automatici — 
 ## 🎯 Prossimi candidati (in ordine di valore decrescente)
 
 1. **Bilanciamento + polish** (variabile) — playthrough completo, tuning di livelli/monete/cespugli.
-2. **Sprite reali + sfondo mappa** (variabile, asset-pesante) — Fase C polish visivo.
-3. **Deploy GitHub Pages + Tauri** (S+M) — Fase D, solo quando il gameplay è solido.
-4. **Pulsante switch turno A↔B esplicito (in battaglia)** — l'unica voce residua di Fase B; oggi il turno passa automaticamente. Bassa priorità.
+2. **Deploy GitHub Pages + Tauri** (S+M) — Fase D, solo quando il gameplay è solido.
+3. **Sound effects + musica + animazioni più ricche** — Fase C residua.
+4. **Code-splitting bundle** (chunk > 500 KB) — perf/build polish.
+5. **Pulsante switch turno A↔B esplicito (in battaglia)** — l'unica voce residua di Fase B; oggi il turno passa automaticamente. Bassa priorità.
 
 Nota: la voce "Mosse di cura HP" è stata chiusa (Fase B). AI ricorre alla cura solo se HP ≤ 30%; lato player la cura consuma il turno e non infligge danno.
 

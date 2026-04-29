@@ -11,6 +11,7 @@ import {
 import { motion } from 'framer-motion'
 import { useState } from 'react'
 import type { PokemonIstanza } from '@/types'
+import { DEPOSIT_BG } from '@data/backgrounds'
 
 /**
  * Scena Deposito: gestione squadra ↔ deposito.
@@ -61,7 +62,10 @@ export function DepositoScene() {
   const isSelezionato = (ref: SlotRef) => refsUguali(selezionato, ref)
 
   return (
-    <div className="w-full h-full flex flex-col bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-950 p-6">
+    <div
+      className="w-full h-full flex flex-col bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-950 p-6 bg-cover bg-center"
+      style={{ backgroundImage: `url(${DEPOSIT_BG})` }}
+    >
       {/* HUD top */}
       <div className="flex justify-between items-center mb-4">
         <button
@@ -185,7 +189,7 @@ function SlotCell({
       {istanza && specie ? (
         largo ? (
           <>
-            <span className="text-2xl">{spriteFor(specie.tipo)}</span>
+            <SmallSprite specieId={specie.id} tipo={specie.tipo} className="w-10 h-10" />
             <div className="flex-1 text-left">
               <div className="font-bold text-sm leading-tight">{istanza.nome}</div>
               <div className="text-xs text-arka-text-muted">
@@ -195,7 +199,7 @@ function SlotCell({
           </>
         ) : (
           <>
-            <span className="text-2xl leading-none">{spriteFor(specie.tipo)}</span>
+            <SmallSprite specieId={specie.id} tipo={specie.tipo} className="w-10 h-10" />
             <span className="text-[9px] text-arka-text-muted leading-tight mt-0.5">
               lv{istanza.livello}
             </span>
@@ -205,6 +209,35 @@ function SlotCell({
         <span className="text-arka-text-muted text-xs">·</span>
       )}
     </motion.button>
+  )
+}
+
+function SmallSprite({
+  specieId,
+  tipo,
+  className = '',
+}: {
+  specieId: number
+  tipo: string
+  className?: string
+}) {
+  return (
+    <span className={`relative inline-flex items-center justify-center ${className}`}>
+      <img
+        src={`/sprites/front_sprites/${specieId}.png`}
+        alt=""
+        className="w-full h-full object-contain"
+        style={{ imageRendering: 'pixelated' }}
+        onError={(e) => {
+          ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+          const sib = e.currentTarget.nextElementSibling as HTMLElement | null
+          if (sib) sib.style.display = 'inline'
+        }}
+      />
+      <span className="text-2xl leading-none" style={{ display: 'none' }}>
+        {spriteFor(tipo)}
+      </span>
+    </span>
   )
 }
 

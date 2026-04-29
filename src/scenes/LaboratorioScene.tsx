@@ -2,6 +2,7 @@ import { useGameStore, creaIstanza } from '@store/gameStore'
 import { getPokemon } from '@data/index'
 import { motion } from 'framer-motion'
 import { useState } from 'react'
+import { LABORATORY_BG } from '@data/backgrounds'
 
 /**
  * Scena del Laboratorio: scelta dello starter.
@@ -41,7 +42,10 @@ export function LaboratorioScene() {
   }
 
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-800 to-slate-950 p-8">
+    <div
+      className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-800 to-slate-950 p-8 bg-cover bg-center"
+      style={{ backgroundImage: `url(${LABORATORY_BG})` }}
+    >
       <h2 className="text-4xl font-bold text-arka-accent mb-2">Laboratorio del Professore</h2>
       <p className="text-arka-text-muted mb-8 text-lg">
         {tuttiHannoStarter
@@ -67,10 +71,18 @@ export function LaboratorioScene() {
               `}
             >
               <div
-                className="w-32 h-32 rounded-full flex items-center justify-center text-5xl"
+                className="w-32 h-32 rounded-full flex items-center justify-center text-5xl overflow-hidden"
                 style={{ backgroundColor: `var(--tw-color-tipo-${specie.tipo.toLowerCase()})` }}
               >
-                {specie.tipo === 'Fuoco' ? '🔥' : specie.tipo === 'Acqua' ? '💧' : specie.tipo === 'Erba' ? '🌿' : '⭐'}
+                <img
+                  src={`/sprites/front_sprites/${specie.id}.png`}
+                  alt={specie.nome}
+                  className="w-full h-full object-contain"
+                  style={{ imageRendering: 'pixelated' }}
+                  onError={(e) => {
+                    ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+                  }}
+                />
               </div>
               <h3 className="text-2xl font-bold">{specie.nome}</h3>
               <span className="text-sm text-arka-text-muted">{specie.tipo}</span>

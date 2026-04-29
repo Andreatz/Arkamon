@@ -74,8 +74,11 @@ export function MappaPrincipaleScene() {
   }
 
   return (
-    <div className="relative w-full h-full bg-gradient-to-br from-cyan-700 via-blue-800 to-slate-900 overflow-hidden">
-      <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_30%_40%,_rgba(255,255,255,0.4),_transparent_60%)]" />
+    <div
+      className="relative w-full h-full bg-cover bg-center overflow-hidden"
+      style={{ backgroundImage: 'url(/maps/Mappa-Finale.jpg)' }}
+    >
+      <div className="absolute inset-0 bg-black/20" />
 
       <div className="absolute top-4 left-4 right-4 flex justify-between items-center z-30">
         <div className="flex gap-2">

@@ -2,6 +2,7 @@ import { useGameStore } from '@store/gameStore'
 import { getAllenatoriInLuogo, getPokemon } from '@data/index'
 import { motion } from 'framer-motion'
 import type { AllenatoreDef } from '@/types'
+import { getBackground } from '@data/backgrounds'
 
 /**
  * Scena Città: lista degli allenatori sfidabili (NPC + Capopalestra)
@@ -42,8 +43,13 @@ export function CittaScene() {
     if (ok) vaiAScena('battaglia')
   }
 
+  const bg = getBackground(luogo)
+
   return (
-    <div className="w-full h-full flex flex-col bg-gradient-to-b from-rose-900 via-rose-700 to-amber-700 p-6">
+    <div
+      className="w-full h-full flex flex-col bg-gradient-to-b from-rose-900 via-rose-700 to-amber-700 p-6 bg-cover bg-center"
+      style={bg ? { backgroundImage: `url(${bg})` } : undefined}
+    >
       <div className="flex justify-between items-center mb-4">
         <button
           className="arka-button-secondary text-sm py-2 px-4"
