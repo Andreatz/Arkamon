@@ -250,6 +250,64 @@ export function calcolaDanno(
 }
 
 // =============================================================
+// MOSSE DI CURA (Fase B)
+// =============================================================
+//
+// Le mosse curative non infliggono danno: ripristinano HP all'attaccante.
+// Distinzione:
+// - effetto: 'CURA'      → cura piatta di `valoreEffetto` HP
+// - effetto: 'CURA_PCT'  → cura `valoreEffetto`% di hpMax (1..100)
+// In entrambi i casi la cura non può oltrepassare hpMax.
+
+export const EFFETTI_CURA = new Set(['CURA', 'CURA_PCT'])
+
+/** True se la mossa è una mossa curativa (non infligge danno). */
+export function èMossaCura(mossa: MossaDef): boolean {
+  return mossa.effetto != null && EFFETTI_CURA.has(mossa.effetto)
+}
+
+/**
+ * Applica una mossa di cura sull'attaccante stesso.
+ * Restituisce un risultato con hp aggiornati e messaggi.
+ */
+export function applicaMossaCura(
+  attaccante: PokemonIstanza,
+  mossa: MossaDef,
+  hpMax: number
+): {
+  istanza: PokemonIstanza
+  hpRecuperato: number
+  messaggi: string[]
+} {
+  const messaggi = [`${attaccante.nome} usa ${mossa.nome}!`]
+  if (!èMossaCura(mossa) || mossa.valoreEffetto == null) {
+    return { istanza: attaccante, hpRecuperato: 0, messaggi }
+  }
+
+  let amount = 0
+  if (mossa.effetto === 'CURA_PCT') {
+    amount = Math.max(1, Math.floor((hpMax * mossa.valoreEffetto) / 100))
+  } else {
+    amount = Math.max(1, Math.floor(mossa.valoreEffetto))
+  }
+
+  const nuovoHp = Math.min(hpMax, attaccante.hp + amount)
+  const recuperato = nuovoHp - attaccante.hp
+
+  if (recuperato <= 0) {
+    messaggi.push(`${attaccante.nome} è già al massimo dell'energia.`)
+    return { istanza: attaccante, hpRecuperato: 0, messaggi }
+  }
+
+  messaggi.push(`${attaccante.nome} recupera ${recuperato} HP.`)
+  return {
+    istanza: { ...attaccante, hp: nuovoHp },
+    hpRecuperato: recuperato,
+    messaggi,
+  }
+}
+
+// =============================================================
 // CATTURA (porting di EseguiAzioneCattura)
 // =============================================================
 
@@ -299,7 +357,9 @@ export function scegliMossaIA(
     let punteggio = dadi * 3.5 + incremento
     if (mossa.tipo === specie.tipo) punteggio *= BATTLE_CONSTANTS.STAB_MULTIPLIER
     punteggio *= efficaciaTipo(mossa.tipo, specieDif.tipo)
-    if (mossa.effetto === 'CURA') punteggio = hpRatio <= 0.2 ? 100 : -1
+    if (mossa.effetto && EFFETTI_CURA.has(mossa.effetto)) {
+      punteggio = hpRatio <= 0.3 ? 100 : -1
+    }
 
     if (punteggio > punteggioMax) {
       punteggioMax = punteggio
