@@ -4,6 +4,7 @@ import { calcolaHPMax } from '@engine/battleEngine'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
 import { EVOLUTION_BG } from '@data/backgrounds'
+import { assetUrl } from '@/utils/assetUrl'
 
 /**
  * Scena Evoluzione: animazione per ogni Pokémon che ha raggiunto la
@@ -265,7 +266,7 @@ function SpriteOrEmoji({
   return (
     <>
       <img
-        src={`/sprites/front_sprites/${specieId}.png`}
+        src={assetUrl(`/sprites/front_sprites/${specieId}.png`)}
         alt=""
         className="w-full h-full object-contain"
         style={{ imageRendering: 'pixelated' }}

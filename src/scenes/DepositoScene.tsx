@@ -12,6 +12,7 @@ import { motion } from 'framer-motion'
 import { useState } from 'react'
 import type { PokemonIstanza } from '@/types'
 import { DEPOSIT_BG } from '@data/backgrounds'
+import { assetUrl } from '@/utils/assetUrl'
 
 /**
  * Scena Deposito: gestione squadra ↔ deposito.
@@ -224,7 +225,7 @@ function SmallSprite({
   return (
     <span className={`relative inline-flex items-center justify-center ${className}`}>
       <img
-        src={`/sprites/front_sprites/${specieId}.png`}
+        src={assetUrl(`/sprites/front_sprites/${specieId}.png`)}
         alt=""
         className="w-full h-full object-contain"
         style={{ imageRendering: 'pixelated' }}

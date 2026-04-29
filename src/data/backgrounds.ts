@@ -1,6 +1,10 @@
+import { assetUrl } from '@/utils/assetUrl'
+
 /**
  * Mapping: nome del luogo (chiave dei MAPPE) → path del background asset.
- * I file vivono in public/backgrounds/ e si servono via percorso assoluto "/backgrounds/...".
+ * I file vivono in public/backgrounds/. I path nelle costanti sotto sono relativi
+ * alla root del dominio; `getBackground()` e gli `export` finali li passano per
+ * `assetUrl()` per rispettare la `base` di Vite (`/` in dev, `/Arkamon-Beta/` su GH Pages).
  */
 const MAP_BG: Record<string, string> = {
   // Città principali
@@ -37,18 +41,19 @@ const MAP_BG: Record<string, string> = {
 }
 
 /** Background di battaglia di default (foresta). */
-export const BATTLE_BG_DEFAULT = '/backgrounds/battle_forest.jpg'
+export const BATTLE_BG_DEFAULT = assetUrl('/backgrounds/battle_forest.jpg')
 
 /** Background della scena Laboratorio. */
-export const LABORATORY_BG = '/backgrounds/laboratory.png'
+export const LABORATORY_BG = assetUrl('/backgrounds/laboratory.png')
 
 /** Background della scena Deposito. */
-export const DEPOSIT_BG = '/backgrounds/deposit.png'
+export const DEPOSIT_BG = assetUrl('/backgrounds/deposit.png')
 
 /** Background della scena Evoluzione. */
-export const EVOLUTION_BG = '/backgrounds/evolution.png'
+export const EVOLUTION_BG = assetUrl('/backgrounds/evolution.png')
 
 /** Restituisce il background per il luogo, o null se non mappato. */
 export function getBackground(nomeLuogo: string): string | null {
-  return MAP_BG[nomeLuogo] ?? null
+  const raw = MAP_BG[nomeLuogo]
+  return raw ? assetUrl(raw) : null
 }

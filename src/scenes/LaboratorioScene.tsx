@@ -3,6 +3,7 @@ import { getPokemon } from '@data/index'
 import { motion } from 'framer-motion'
 import { useState } from 'react'
 import { LABORATORY_BG } from '@data/backgrounds'
+import { assetUrl } from '@/utils/assetUrl'
 
 /**
  * Scena del Laboratorio: scelta dello starter.
@@ -75,7 +76,7 @@ export function LaboratorioScene() {
                 style={{ backgroundColor: `var(--tw-color-tipo-${specie.tipo.toLowerCase()})` }}
               >
                 <img
-                  src={`/sprites/front_sprites/${specie.id}.png`}
+                  src={assetUrl(`/sprites/front_sprites/${specie.id}.png`)}
                   alt={specie.nome}
                   className="w-full h-full object-contain"
                   style={{ imageRendering: 'pixelated' }}

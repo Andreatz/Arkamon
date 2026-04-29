@@ -1,6 +1,7 @@
 import { useGameStore } from '@store/gameStore'
 import { MAPPE } from '@data/index'
 import { motion } from 'framer-motion'
+import { assetUrl } from '@/utils/assetUrl'
 
 /**
  * Mappa principale: 28 luoghi disposti sopra un'Italia stilizzata.
@@ -76,7 +77,7 @@ export function MappaPrincipaleScene() {
   return (
     <div
       className="relative w-full h-full bg-cover bg-center overflow-hidden"
-      style={{ backgroundImage: 'url(/maps/Mappa-Finale.jpg)' }}
+      style={{ backgroundImage: `url(${assetUrl('/maps/Mappa-Finale.jpg')})` }}
     >
       <div className="absolute inset-0 bg-black/20" />
 

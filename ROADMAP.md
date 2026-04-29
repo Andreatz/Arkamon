@@ -155,7 +155,7 @@ Tutti NPC `tipo: "NPC"` (+200₳/-200₳, niente capipalestra fuori dal pool uff
 
 ## 📦 Fase D — Distribuzione
 
-- ⏭️ Deploy `gh-pages` (lo script `npm run deploy` esiste già)
+- ✅ **Deploy GitHub Pages**: workflow `.github/workflows/deploy.yml` (build + upload-pages-artifact + deploy-pages) attivo su push a `main` e via `workflow_dispatch`. Vite `base` corretto a `/Arkamon-Beta/` (era `/Arkamon/`). Nuovo helper `src/utils/assetUrl.ts` (usa `import.meta.env.BASE_URL`) applicato a tutti i path runtime di asset (`/sprites/...`, `/backgrounds/...`, `/ui/...`, `/maps/...`) — Vite riscrive solo asset importati staticamente, gli altri vanno prefissati a mano. `src/vite-env.d.ts` aggiunto per i tipi di `import.meta.env`. Su `Andreatz/Arkamon-Beta`: attiva GitHub Pages dalle Settings → Pages → Source: "GitHub Actions"; il primo push (o "Run workflow" manuale) pubblicherà su `https://andreatz.github.io/Arkamon-Beta/`.
 - ⏭️ Build desktop con Tauri
 
 ---
@@ -193,10 +193,10 @@ I test coprono solo l'engine puro. Le scene React non hanno test automatici — 
 ## 🎯 Prossimi candidati (in ordine di valore decrescente)
 
 1. **Bilanciamento + polish** (variabile) — playthrough completo, tuning di livelli/monete/cespugli.
-2. **Deploy GitHub Pages + Tauri** (S+M) — Fase D, solo quando il gameplay è solido.
+2. **Build desktop con Tauri** — l'unica voce residua di Fase D. Richiede setup Rust + binari per piattaforma.
 3. **Sound effects + musica** — Fase C residua (richiede asset audio esterni).
 
-Nota: Fase B chiusa (stati, cura, suprema, masterball, switch turno PvP). Fase C polish: code-splitting + animazioni chiuse — restano solo audio e bilanciamento.
+Nota: Fase B chiusa. Fase C polish: code-splitting + animazioni chiuse. Fase D: deploy gh-pages chiuso (workflow attivo su push a main).
 
 ---
 
