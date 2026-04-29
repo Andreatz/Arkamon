@@ -11777,8 +11777,8 @@
     "id": 59,
     "nome": "Assorbilinfa",
     "tipo": "Erba",
-    "effetto": null,
-    "valoreEffetto": null,
+    "effetto": "CURA_PCT",
+    "valoreEffetto": 25,
     "dadiPerLivello": {
       "5": 1,
       "6": 1,
@@ -13198,8 +13198,8 @@
     "id": 66,
     "nome": "Risveglio verde",
     "tipo": "Erba",
-    "effetto": null,
-    "valoreEffetto": null,
+    "effetto": "CURA_PCT",
+    "valoreEffetto": 40,
     "dadiPerLivello": {
       "5": 3,
       "6": 3,
@@ -30859,8 +30859,8 @@
     "id": 153,
     "nome": "Respiro profondo",
     "tipo": "Normale",
-    "effetto": null,
-    "valoreEffetto": null,
+    "effetto": "CURA_PCT",
+    "valoreEffetto": 30,
     "dadiPerLivello": {
       "5": 1,
       "6": 1,
@@ -31062,8 +31062,8 @@
     "id": 154,
     "nome": "Tocco di pace",
     "tipo": "Normale",
-    "effetto": null,
-    "valoreEffetto": null,
+    "effetto": "CURA_PCT",
+    "valoreEffetto": 50,
     "dadiPerLivello": {
       "5": 0,
       "6": 0,

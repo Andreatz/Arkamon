@@ -10,6 +10,8 @@ import {
   xpGuadagnato,
   applicaStato,
   risolviStatoInizioTurno,
+  èMossaCura,
+  applicaMossaCura,
 } from '@engine/battleEngine'
 import { getPokemon, getMossa, getAllenatore } from '@data/index'
 import { calcolaVariazioneMonete, type TipoAvversario } from '@engine/battleEngine'
@@ -181,6 +183,20 @@ export function BattagliaScene() {
       return
     }
 
+    // Mossa di cura: niente danno al nemico, solo ripristino HP all'attaccante.
+    const mossaScelta = specieA.mosse[numeroMossa]
+      ? getMossa(specieA.mosse[numeroMossa]!)
+      : null
+    if (mossaScelta && èMossaCura(mossaScelta)) {
+      const cura = applicaMossaCura(pkmnAEffettivo, mossaScelta, hpMaxA)
+      setPkmnA(cura.istanza)
+      setSquadraA((sq) => updateInSquadra(sq, cura.istanza))
+      setLog((l) => [...l, ...cura.messaggi])
+      setTurnoA(false)
+      setTimeout(() => turnoAvversario(pkmnB), 1200)
+      return
+    }
+
     const ris = calcolaDanno(pkmnAEffettivo, pkmnB, numeroMossa)
     if (!ris) return
 
@@ -280,6 +296,20 @@ export function BattagliaScene() {
     }
 
     const mossa = scegliMossaIA(bEffettivo, pkmnA)
+    const specieB = getPokemon(bEffettivo.specieId)
+    const mossaIdB = specieB?.mosse[mossa] ?? null
+    const mossaDefB = mossaIdB ? getMossa(mossaIdB) : null
+
+    // Cura lato AI: l'avversario ripristina HP, niente danno al giocatore.
+    if (mossaDefB && èMossaCura(mossaDefB)) {
+      const cura = applicaMossaCura(bEffettivo, mossaDefB, hpMaxBcorrente)
+      setPkmnB(cura.istanza)
+      setSquadraB((sq) => updateInSquadra(sq, cura.istanza))
+      setLog((l) => [...l, ...cura.messaggi])
+      setTurnoA(true)
+      return
+    }
+
     const ris = calcolaDanno(bEffettivo, pkmnA, mossa)
     if (!ris) {
       setTurnoA(true)

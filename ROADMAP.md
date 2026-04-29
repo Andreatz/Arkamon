@@ -9,7 +9,7 @@
 | --- | --- |
 | Branch principale | `main` (tutte le PR Fase A + stati alterati mergiate) |
 | Ultimo commit | `7673233` fix(battaglia): import StatoAlterato/STATO_BADGE |
-| Test (`npm test`) | **63/63 verdi** |
+| Test (`npm test`) | **73/73 verdi** |
 | Type check (`tsc --noEmit`) | clean |
 | Build (`npm run build`) | clean (566 KB / 115 KB gzip; warning chunk > 500 KB non bloccante) |
 | Loop end-to-end giocabile | ✅ titolo → laboratorio → mappa (28 luoghi) → percorso/città → battaglia (NPC/Capo/selvatica multi-pokemon con cattura/XP/evoluzione) → ritorno · deposito accessibile dalla mappa |
@@ -124,7 +124,7 @@ Le 14 città principali hanno almeno 1 allenatore (NPC o Capopalestra), ma alcun
 ## 🆕 Fase B — Estensioni nuove (mai in VBA)
 
 - ✅ **Stati alterati**: Confusione / Sonno / Avvelenamento — engine + UI + 6 mosse trigger nei dati (Fase B chiusa)
-- ⏭️ **Mosse di cura HP** a percentuale (l'AI ha già la priorità "CURA" in `scegliMossaIA`, manca l'esecuzione lato player)
+- ✅ **Mosse di cura HP**: helper `applicaMossaCura` + integrazione `BattagliaScene` (player+AI) + 4 mosse `CURA_PCT` popolate (Tocco di pace 50%, Risveglio verde 40%, Respiro profondo 30%, Assorbilinfa 25%). AI ricorre alla cura se HP ≤ 30%.
 - ⏭️ **Mossa Suprema**: ×2 danno + autodanno 50% HP max
 - ⏭️ **Oggetti**: Masterball (cattura 100%), pozioni, etc.
 
@@ -157,8 +157,9 @@ Le 14 città principali hanno almeno 1 allenatore (NPC o Capopalestra), ma alcun
 | `src/engine/__tests__/monete.test.ts` | 7 | calcolaVariazioneMonete su tutti i match-up (NPC/Capopalestra/Selvatico/PVP × vittoria/sconfitta) |
 | `src/engine/__tests__/encounters.test.ts` | 8 | pesoCategoria + scegliIncontroPesato (deterministico via RNG iniettabile) |
 | `src/engine/__tests__/stati.test.ts` | 12 | applicaStato (durate) + risolviStatoInizioTurno (no-stato, veleno con clamp, sonno sveglia/saltato/cleared, confusione self-hit/agisce/cleared) |
+| `src/engine/__tests__/cura.test.ts` | 10 | èMossaCura + applicaMossaCura (CURA piatta, CURA_PCT, clamp hpMax, HP pieni, no-op, AI smoke) |
 | `src/engine/__tests__/deposito.test.ts` | 12 | scambia() (no-op, swap squadra↔dep + dep↔dep + squadra↔squadra, move con compattazione/append, squadra piena, immutabilità) |
-| **Totale** | **63** | tutto verde |
+| **Totale** | **73** | tutto verde |
 
 I test coprono solo l'engine puro. Le scene React non hanno test automatici — verifica manuale via `npm run dev`.
 
@@ -179,13 +180,14 @@ I test coprono solo l'engine puro. Le scene React non hanno test automatici — 
 
 ## 🎯 Prossimi candidati (in ordine di valore decrescente)
 
-1. **Mosse di cura HP** (S-M) — completa il pattern degli "effetti" speciali: nuovi `effetto: 'CURA'`/`'CURA_PCT'` con applicazione a inizio turno. L'AI ha già la priorità.
-2. **Allenatori nelle città vuote** (M, data-entry) — 1-2 NPC per ciascun luogo non popolato. Riempie il mondo.
-3. **Bilanciamento + polish** (variabile) — playthrough completo, tuning di livelli/monete/cespugli.
-4. **PvP esplicito** (M) — utile solo se vuoi un'esperienza locale a 2 giocatori reali.
-5. **Mossa Suprema + Oggetti** (M) — Fase B residua.
-6. **Sprite reali + sfondo mappa** (variabile, asset-pesante) — Fase C polish visivo.
-7. **Deploy GitHub Pages + Tauri** (S+M) — Fase D, solo quando il gameplay è solido.
+1. **Allenatori nelle città vuote** (M, data-entry) — 1-2 NPC per ciascun luogo non popolato. Riempie il mondo.
+2. **Bilanciamento + polish** (variabile) — playthrough completo, tuning di livelli/monete/cespugli.
+3. **PvP esplicito** (M) — utile solo se vuoi un'esperienza locale a 2 giocatori reali.
+4. **Mossa Suprema + Oggetti** (M) — Fase B residua.
+5. **Sprite reali + sfondo mappa** (variabile, asset-pesante) — Fase C polish visivo.
+6. **Deploy GitHub Pages + Tauri** (S+M) — Fase D, solo quando il gameplay è solido.
+
+Nota: la voce "Mosse di cura HP" è stata chiusa (Fase B). AI ricorre alla cura solo se HP ≤ 30%; lato player la cura consuma il turno e non infligge danno.
 
 ---
 
