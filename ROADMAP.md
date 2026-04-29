@@ -115,9 +115,14 @@ Chiavi accettate (mappa in `EFFETTO_TO_STATO` in `battleEngine.ts`): `'CONFUSION
 
 Il tipo `'PVP'` è già nei tipi/store ma non c'è UX dedicata: oggi l'allenatore PVP (il Rivale) viene gestito dall'AI come un NPC normale. Per un PvP "vero" serve una scena con due pulsantiere mosse alternate, porting di `Mod_Battle_Engine` per il flusso a 2 giocatori umani.
 
-### Allenatori per le città vuote (M, data-entry)
+### ✅ Popolamento allenatori percorsi/città — FATTO
 
-Le 14 città principali hanno almeno 1 allenatore (NPC o Capopalestra), ma alcuni percorsi e città secondarie sono vuoti. Aggiungere 1-2 NPC per ogni luogo non popolato dà materiale per allenamento e rende il mondo più vivo.
+Tutti i 28 luoghi della mappa hanno ora almeno un allenatore. Aggiunti 17 NPC (ID 250-266) con livelli interpolati tra le tappe esistenti:
+
+- 13 NPC sui percorsi vuoti (Percorso_2..14): Pendolare Lia (P2 lvl 12), Camionista Tito (P3 lvl 18), Studente Bilo (P4 lvl 19), Naturista Selva (P5 lvl 20), Operaio Bruno (P6 lvl 21), Esploratore Tom (P7 lvl 32), Pescatrice Rina (P8 lvl 38), Geologo Pietro (P9 lvl 43), Vagabondo Gino (P10 lvl 44), Cantante Lola (P11 lvl 44), Botanico Aldo (P12 lvl 45), Custode Filo (P13 lvl 49), Pellegrina Sara (P14 lvl 53).
+- 4 NPC nelle 2 città vuote: Cuoca Rosa + Pescatore Calò (ReggioCalabria lvl 44-45), Tassista Mira + Cacciatore Olmo (Molisnt lvl 49).
+
+Tutti NPC `tipo: "NPC"` (+200₳/-200₳, niente capipalestra fuori dal pool ufficiale degli 8).
 
 ---
 
@@ -180,12 +185,11 @@ I test coprono solo l'engine puro. Le scene React non hanno test automatici — 
 
 ## 🎯 Prossimi candidati (in ordine di valore decrescente)
 
-1. **Allenatori nelle città vuote** (M, data-entry) — 1-2 NPC per ciascun luogo non popolato. Riempie il mondo.
-2. **Bilanciamento + polish** (variabile) — playthrough completo, tuning di livelli/monete/cespugli.
-3. **PvP esplicito** (M) — utile solo se vuoi un'esperienza locale a 2 giocatori reali.
-4. **Mossa Suprema + Oggetti** (M) — Fase B residua.
-5. **Sprite reali + sfondo mappa** (variabile, asset-pesante) — Fase C polish visivo.
-6. **Deploy GitHub Pages + Tauri** (S+M) — Fase D, solo quando il gameplay è solido.
+1. **Bilanciamento + polish** (variabile) — playthrough completo, tuning di livelli/monete/cespugli.
+2. **PvP esplicito** (M) — utile solo se vuoi un'esperienza locale a 2 giocatori reali.
+3. **Mossa Suprema + Oggetti** (M) — Fase B residua.
+4. **Sprite reali + sfondo mappa** (variabile, asset-pesante) — Fase C polish visivo.
+5. **Deploy GitHub Pages + Tauri** (S+M) — Fase D, solo quando il gameplay è solido.
 
 Nota: la voce "Mosse di cura HP" è stata chiusa (Fase B). AI ricorre alla cura solo se HP ≤ 30%; lato player la cura consuma il turno e non infligge danno.
 
