@@ -21,4 +21,16 @@ export default defineConfig({
     port: 3000,
     open: true,
   },
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          motion: ['framer-motion'],
+          zustand: ['zustand'],
+        },
+      },
+    },
+  },
 })

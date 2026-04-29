@@ -1,6 +1,6 @@
 import { useGameStore, creaIstanza } from '@store/gameStore'
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   calcolaDanno,
   calcolaHPMax,
@@ -61,6 +61,18 @@ export function BattagliaScene() {
   const [shaking, setShaking] = useState<'A' | 'B' | null>(null)
   /** In PvP: vero quando si attende la scelta della mossa di B (input umano). */
   const [mostraMoseB, setMostraMoseB] = useState(false)
+  /**
+   * In PvP: pausa esplicita tra fine turno corrente e inizio turno successivo.
+   * Mostra un pulsante "Passa il controllo a ..." che il giocatore deve cliccare
+   * per evitare che chi sta passando il PC veda le mosse dell'altro.
+   * - 'A→B' richiede `pendingB` (verrà passato a turnoAvversario al click)
+   * - 'B→A' nessun payload: al click si limita a riassegnare il turno ad A
+   */
+  const [attesaPassaggio, setAttesaPassaggio] = useState<
+    | { direzione: 'A→B'; pendingB: PokemonIstanza }
+    | { direzione: 'B→A' }
+    | null
+  >(null)
   const [terminata, setTerminata] = useState(false)
   // Evoluzioni accumulate durante la battaglia: applicate dopo, in EvoluzioneScene
   const [evoluzioniInAttesa, setEvoluzioniInAttesa] = useState<
@@ -133,6 +145,46 @@ export function BattagliaScene() {
     eseguiMossaB(pkmnB, calcolaHPMax(pkmnB), numeroMossa)
   }
 
+  /**
+   * Termina il turno del giocatore A.
+   * - PvP: pausa esplicita; il giocatore deve cliccare "Passa il controllo".
+   * - NPC/Selvatico: il turno passa automaticamente dopo `delayMs`.
+   */
+  const passaTurnoAaB = (nuovoB: PokemonIstanza, delayMs = 1500) => {
+    setTurnoA(false)
+    if (isPvP) {
+      setAttesaPassaggio({ direzione: 'A→B', pendingB: nuovoB })
+      return
+    }
+    setTimeout(() => turnoAvversario(nuovoB), delayMs)
+  }
+
+  /**
+   * Termina il turno di B.
+   * - PvP: pausa esplicita prima di ridare il turno ad A.
+   * - NPC: turno ad A immediato.
+   */
+  const passaTurnoBaA = () => {
+    if (isPvP) {
+      setAttesaPassaggio({ direzione: 'B→A' })
+      return
+    }
+    setTurnoA(true)
+  }
+
+  /** Click sul pulsante esplicito di passaggio turno (solo PvP). */
+  const confermaPassaggio = () => {
+    if (!attesaPassaggio) return
+    if (attesaPassaggio.direzione === 'A→B') {
+      const nb = attesaPassaggio.pendingB
+      setAttesaPassaggio(null)
+      turnoAvversario(nb)
+    } else {
+      setAttesaPassaggio(null)
+      setTurnoA(true)
+    }
+  }
+
   const specieA = getPokemon(pkmnA.specieId)!
   const hpMaxA = calcolaHPMax(pkmnA)
   const hpMaxB = calcolaHPMax(pkmnB)
@@ -197,8 +249,7 @@ export function BattagliaScene() {
 
     if (!statoRes.puoAgire) {
       // Turno saltato: passa all'avversario
-      setTurnoA(false)
-      setTimeout(() => turnoAvversario(pkmnB), 1200)
+      passaTurnoAaB(pkmnB, 1200)
       return
     }
 
@@ -211,8 +262,7 @@ export function BattagliaScene() {
       setPkmnA(cura.istanza)
       setSquadraA((sq) => updateInSquadra(sq, cura.istanza))
       setLog((l) => [...l, ...cura.messaggi])
-      setTurnoA(false)
-      setTimeout(() => turnoAvversario(pkmnB), 1200)
+      passaTurnoAaB(pkmnB, 1200)
       return
     }
 
@@ -277,8 +327,7 @@ export function BattagliaScene() {
         ])
         setPkmnA(nextA)
         // Turno passa comunque all'avversario (la mossa è stata usata)
-        setTurnoA(false)
-        setTimeout(() => turnoAvversario(nuovoB), 1500)
+        passaTurnoAaB(nuovoB, 1500)
         return
       }
       setLog((l) => [...l, 'Hai perso la battaglia...'])
@@ -288,8 +337,7 @@ export function BattagliaScene() {
     }
 
     // Turno avversario dopo 1.5s
-    setTurnoA(false)
-    setTimeout(() => turnoAvversario(nuovoB), 1500)
+    passaTurnoAaB(nuovoB, 1500)
   }
 
   // Porting di: EseguiAzioneCattura da old_files/Mod_Battle_Engine.txt
@@ -361,7 +409,7 @@ export function BattagliaScene() {
     }
 
     if (!statoRes.puoAgire) {
-      setTurnoA(true)
+      passaTurnoBaA()
       return
     }
 
@@ -395,13 +443,13 @@ export function BattagliaScene() {
       setPkmnB(cura.istanza)
       setSquadraB((sq) => updateInSquadra(sq, cura.istanza))
       setLog((l) => [...l, ...cura.messaggi])
-      setTurnoA(true)
+      passaTurnoBaA()
       return
     }
 
     const ris = calcolaDanno(bEffettivo, pkmnA, mossaIdx)
     if (!ris) {
-      setTurnoA(true)
+      passaTurnoBaA()
       return
     }
     setShaking('A')
@@ -436,7 +484,7 @@ export function BattagliaScene() {
           `${nuovoA.nome} è KO! Mandi in campo ${nextA.nome}!`,
         ])
         setPkmnA(nextA)
-        setTurnoA(true)
+        passaTurnoBaA()
         return
       }
       setLog((l) => [...l, 'Hai perso la battaglia...'])
@@ -468,7 +516,7 @@ export function BattagliaScene() {
       return
     }
 
-    setTurnoA(true)
+    passaTurnoBaA()
   }
 
   const bgBattaglia = getBackground(luogoRitorno) ?? BATTLE_BG_DEFAULT
@@ -486,29 +534,37 @@ export function BattagliaScene() {
         </>
       )}
 
-      {/* Pokémon avversario (alto a destra) */}
-      <PokemonBattleSlot
-        istanza={pkmnB}
-        hpMax={hpMaxB}
-        position="top-right"
-        shaking={shaking === 'B'}
-      />
+      {/* Pokémon avversario (alto a destra) — chiave su istanzaId per riattivare slide-in al cambio */}
+      <AnimatePresence mode="popLayout">
+        <PokemonBattleSlot
+          key={pkmnB.istanzaId}
+          istanza={pkmnB}
+          hpMax={hpMaxB}
+          position="top-right"
+          shaking={shaking === 'B'}
+          lunging={shaking === 'A'}
+        />
+      </AnimatePresence>
 
       {/* Pokémon giocatore (basso a sinistra) */}
-      <PokemonBattleSlot
-        istanza={pkmnA}
-        hpMax={hpMaxA}
-        position="bottom-left"
-        shaking={shaking === 'A'}
-      />
+      <AnimatePresence mode="popLayout">
+        <PokemonBattleSlot
+          key={pkmnA.istanzaId}
+          istanza={pkmnA}
+          hpMax={hpMaxA}
+          position="bottom-left"
+          shaking={shaking === 'A'}
+          lunging={shaking === 'B'}
+        />
+      </AnimatePresence>
 
       {/* Box log eventi */}
       <div className="absolute bottom-32 left-1/2 -translate-x-1/2 arka-panel px-6 py-3 max-w-md">
         <p className="text-white text-sm">{log[log.length - 1]}</p>
       </div>
 
-      {/* Pulsanti mosse di A — nascosti in PvP quando aspetta B */}
-      {!mostraMoseB && (
+      {/* Pulsanti mosse di A — nascosti in PvP quando aspetta B o passaggio turno */}
+      {!mostraMoseB && !attesaPassaggio && (
         <div className="absolute bottom-4 right-4 grid grid-cols-3 gap-2 z-20">
           {specieA.mosse.map((mossaId, i) => {
             const mossa = mossaId ? getMossa(mossaId) : null
@@ -572,6 +628,21 @@ export function BattagliaScene() {
         </div>
       )}
 
+      {/* Pulsante esplicito di passaggio turno (solo PvP) */}
+      {isPvP && attesaPassaggio && !terminata && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={confermaPassaggio}
+            className="arka-button text-base px-6 py-3 shadow-lg"
+          >
+            ▶ Passa il controllo al{' '}
+            {attesaPassaggio.direzione === 'A→B' ? 'Rivale' : 'Giocatore'}
+          </motion.button>
+        </div>
+      )}
+
       {/* Esito + monete (solo battaglie NPC/Capopalestra) */}
       {terminata && isNPC && esito && (() => {
         const allenatore = battaglia?.allenatoreId !== undefined
@@ -614,6 +685,10 @@ export function BattagliaScene() {
         <span className="text-sm">
           {terminata
             ? 'Battaglia finita'
+            : isPvP && attesaPassaggio
+            ? attesaPassaggio.direzione === 'A→B'
+              ? 'Pronto per passare il controllo al Rivale'
+              : 'Pronto per passare il controllo al Giocatore'
             : isPvP && mostraMoseB
             ? 'Turno del Rivale — scegli una mossa'
             : isPvP && turnoA
@@ -659,22 +734,42 @@ function PokemonBattleSlot({
   hpMax,
   position,
   shaking,
+  lunging,
 }: {
   istanza: PokemonIstanza
   hpMax: number
   position: 'top-right' | 'bottom-left'
   shaking: boolean
+  lunging: boolean
 }) {
   const isPlayer = position === 'bottom-left'
   const posClass = isPlayer ? 'bottom-32 left-12 flex-row' : 'top-12 right-12 flex-row-reverse'
   // Vista posteriore per il giocatore (visto da dietro), frontale per l'avversario.
   const spriteFolder = isPlayer ? 'back_sprites' : 'front_sprites'
   const spriteSrc = `/sprites/${spriteFolder}/${istanza.specieId}.png`
+  const isKO = istanza.hp <= 0
+
+  // shaking = sto subendo un colpo; lunging = sto attaccando (slancio verso il bersaglio).
+  const innerAnim = shaking
+    ? { x: [0, -8, 8, -8, 8, 0] }
+    : lunging
+    ? { x: isPlayer ? [0, 30, 0] : [0, -30, 0] }
+    : {}
 
   return (
-    <div className={`absolute ${posClass} flex items-center gap-4 z-10`}>
+    <motion.div
+      className={`absolute ${posClass} flex items-center gap-4 z-10`}
+      initial={{ x: isPlayer ? -400 : 400, opacity: 0 }}
+      animate={{
+        x: 0,
+        opacity: isKO ? 0.45 : 1,
+        filter: isKO ? 'grayscale(100%)' : 'grayscale(0%)',
+      }}
+      exit={{ y: 180, opacity: 0, rotate: isPlayer ? -15 : 15, filter: 'grayscale(100%)' }}
+      transition={{ type: 'spring', stiffness: 110, damping: 16 }}
+    >
       <motion.div
-        animate={shaking ? { x: [0, -8, 8, -8, 8, 0] } : {}}
+        animate={innerAnim}
         transition={{ duration: 0.4 }}
         className="w-40 h-40 flex items-center justify-center drop-shadow-2xl"
       >
@@ -705,7 +800,7 @@ function PokemonBattleSlot({
         hpMax={hpMax}
         stato={istanza.stato?.tipo}
       />
-    </div>
+    </motion.div>
   )
 }
 

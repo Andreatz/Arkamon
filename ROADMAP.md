@@ -11,7 +11,7 @@
 | Ultimo commit | `7673233` fix(battaglia): import StatoAlterato/STATO_BADGE |
 | Test (`npm test`) | **80/80 verdi** |
 | Type check (`tsc --noEmit`) | clean |
-| Build (`npm run build`) | clean (566 KB / 115 KB gzip; warning chunk > 500 KB non bloccante) |
+| Build (`npm run build`) | clean — split in 4 chunk: app 315 KB / 33 KB gzip + react 134 KB / 43 KB + motion 115 KB / 38 KB + zustand 10 KB / 4 KB; nessun warning |
 | Loop end-to-end giocabile | ✅ titolo → laboratorio → mappa (28 luoghi) → percorso/città → battaglia (NPC/Capo/selvatica multi-pokemon con cattura/XP/evoluzione) → ritorno · deposito accessibile dalla mappa |
 
 ## Stack & vincoli
@@ -137,9 +137,7 @@ Tutti NPC `tipo: "NPC"` (+200₳/-200₳, niente capipalestra fuori dal pool uff
 - ✅ **Mosse di cura HP**: helper `applicaMossaCura` + integrazione `BattagliaScene` (player+AI) + 4 mosse `CURA_PCT` popolate (Tocco di pace 50%, Risveglio verde 40%, Respiro profondo 30%, Assorbilinfa 25%). AI ricorre alla cura se HP ≤ 30%.
 - ✅ **Mossa Suprema**: `èMossaSuprema` + `autodannoSuprema` + ×2 al danno + autodanno % di hpMax. Integrato in `BattagliaScene` (gestisce auto-KO con switch o sconfitta, lato player+AI). 3 mosse `SUPREMA` popolate (Cannone Infernale, Ordine sovrano, Vortice divino — tutte autodanno 50%). AI evita la suprema se HP < pct + 5%.
 - ✅ **Oggetti / Masterball**: nuovo tipo `OggettoId`, campo `inventario` in `StatoGiocatore`, action store `usaOggetto`/`aggiungiOggetto`, default 1 Masterball per giocatore. Pulsante "💎 Masterball ×N" in `BattagliaScene` (solo selvatica) con cattura garantita 100%. Migrazione safe per save preesistenti via `merge` con fallback.
-- ⏭️ **Mossa Suprema**: ×2 danno + autodanno 50% HP max
-- ⏭️ **Oggetti**: Masterball (cattura 100%), pozioni, etc.
-- ⏭️ **Pulsante switch turno A↔B esplicito** (oggi auto)
+- ✅ **Pulsante switch turno A↔B esplicito** (PvP): pausa esplicita tra turno corrente e successivo via pulsante "Passa il controllo al Rivale/Giocatore". Helper `passaTurnoAaB`/`passaTurnoBaA`/`confermaPassaggio` in `BattagliaScene`. Solo in PvP — battaglie NPC e selvatiche restano automatiche. Indicatore turno in alto si aggiorna ("Pronto per passare il controllo a..."). Le pulsantiere mosse sono nascoste durante l'attesa per impedire all'altro giocatore di sbirciare.
 
 ---
 
@@ -147,11 +145,11 @@ Tutti NPC `tipo: "NPC"` (+200₳/-200₳, niente capipalestra fuori dal pool uff
 
 - ⏭️ Sound effects (mosse, KO, evoluzione, cattura)
 - ⏭️ Musica di sottofondo per scena
-- ⏭️ Animazioni (entrata Pokémon, evoluzione più ricca, KO)
+- ✅ **Animazioni**: entrata Pokémon (slide-in da fuori schermo, spring), KO (exit con fall + rotate + grayscale), lunge attaccante (push verso il bersaglio sincronizzato col shaking del difensore). `BattagliaScene` avvolge `PokemonBattleSlot` in `AnimatePresence` keyed su `istanzaId` → switch su KO triggera exit/enter automatico. Evoluzione: glow giallo pulsato sul nuovo sprite + 14 particelle radiali che esplodono dal centro al "post".
 - ⏭️ Bilanciamento contenuti (livelli allenatori, distribuzione cespugli, economia monete)
 - ✅ **Sprite reali**: sostituite le emoji 🐺/🦈/🔥/💧 con sprite veri da `public/sprites/{front,back}_sprites/{id}.png`. Battaglia (back per giocatore, front per avversario), Laboratorio (selezione starter), Evoluzione (pre/post), Deposito (slot squadra + box). Fallback emoji su `onError` se uno sprite manca.
 - ✅ **Sfondi reali**: nuovo `src/data/backgrounds.ts` con mapping luogo→file. Mappa principale (`Mappa-Finale.jpg`), Percorso/Città (28 luoghi mappati), Battaglia (sfondo del luogo di provenienza, fallback `battle_forest.jpg`), Laboratorio, Deposito, Evoluzione. Logo `logo_arkamon.png` nel TitoloScene.
-- ⏭️ Code-splitting del bundle (chunk attuale > 500 KB; framer-motion separabile via `manualChunks`)
+- ✅ **Code-splitting del bundle**: `vite.config.ts` con `manualChunks` per `react`/`react-dom`, `framer-motion`, `zustand`. Chunk principale sceso da 566 KB → 315 KB (33 KB gzip), nessun warning > 500 KB, vendor cacheabili separatamente.
 
 ---
 
@@ -196,11 +194,9 @@ I test coprono solo l'engine puro. Le scene React non hanno test automatici — 
 
 1. **Bilanciamento + polish** (variabile) — playthrough completo, tuning di livelli/monete/cespugli.
 2. **Deploy GitHub Pages + Tauri** (S+M) — Fase D, solo quando il gameplay è solido.
-3. **Sound effects + musica + animazioni più ricche** — Fase C residua.
-4. **Code-splitting bundle** (chunk > 500 KB) — perf/build polish.
-5. **Pulsante switch turno A↔B esplicito (in battaglia)** — l'unica voce residua di Fase B; oggi il turno passa automaticamente. Bassa priorità.
+3. **Sound effects + musica** — Fase C residua (richiede asset audio esterni).
 
-Nota: la voce "Mosse di cura HP" è stata chiusa (Fase B). AI ricorre alla cura solo se HP ≤ 30%; lato player la cura consuma il turno e non infligge danno.
+Nota: Fase B chiusa (stati, cura, suprema, masterball, switch turno PvP). Fase C polish: code-splitting + animazioni chiuse — restano solo audio e bilanciamento.
 
 ---
 

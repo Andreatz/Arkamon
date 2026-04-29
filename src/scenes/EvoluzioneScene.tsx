@@ -174,7 +174,15 @@ export function EvoluzioneScene() {
             <motion.div
               key="post"
               initial={{ opacity: 0, scale: 1.5 }}
-              animate={{ opacity: 1, scale: 1 }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+                boxShadow: [
+                  '0 0 0px rgba(250, 204, 21, 0)',
+                  '0 0 60px rgba(250, 204, 21, 0.9)',
+                  '0 0 30px rgba(250, 204, 21, 0.6)',
+                ],
+              }}
               transition={{ duration: 0.6, type: 'spring' }}
               className="w-48 h-48 rounded-full bg-arka-surface border-4 border-yellow-400 shadow-2xl flex items-center justify-center overflow-hidden"
             >
@@ -182,6 +190,30 @@ export function EvoluzioneScene() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Particelle che esplodono dal centro all'apparizione del nuovo sprite */}
+        {fase === 'post' && (
+          <div className="absolute inset-0 pointer-events-none">
+            {Array.from({ length: 14 }).map((_, i) => {
+              const angle = (i / 14) * Math.PI * 2
+              const dist = 180 + (i % 3) * 30
+              return (
+                <motion.div
+                  key={i}
+                  className="absolute top-1/2 left-1/2 w-2 h-2 rounded-full bg-yellow-300"
+                  initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                  animate={{
+                    x: Math.cos(angle) * dist,
+                    y: Math.sin(angle) * dist,
+                    opacity: 0,
+                    scale: 0.3,
+                  }}
+                  transition={{ duration: 1.1, ease: 'easeOut', delay: 0.1 }}
+                />
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Testo + pulsante */}
