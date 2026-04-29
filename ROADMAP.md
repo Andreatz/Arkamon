@@ -111,9 +111,14 @@ Tutte le voci della roadmap originale "Fase A" sono portate in TS, testate e gio
 
 Chiavi accettate (mappa in `EFFETTO_TO_STATO` in `battleEngine.ts`): `'CONFUSIONE'`, `'SONNO'`, `'VELENO'`. Per ampliare in futuro basta aggiungere altre voci con queste chiavi.
 
-### Battaglia PvP esplicita (M)
+### ✅ Battaglia PvP esplicita — FATTO
 
-Il tipo `'PVP'` è già nei tipi/store ma non c'è UX dedicata: oggi l'allenatore PVP (il Rivale) viene gestito dall'AI come un NPC normale. Per un PvP "vero" serve una scena con due pulsantiere mosse alternate, porting di `Mod_Battle_Engine` per il flusso a 2 giocatori umani.
+Il tipo `'PVP'` (oggi assegnato al Rivale del Percorso_1) attiva una pulsantiera mosse alternata controllata da input umano per entrambi i lati: niente AI sul Rivale.
+
+Implementazione:
+- Refactor di `BattagliaScene.turnoAvversario`: risolve stato di B, poi se PvP attende input umano (`mostraMoseB`); se NPC continua come prima con `scegliMossaIA`.
+- Nuova `eseguiMossaB(bEffettivo, hpMaxB, idx)` condivisa tra PvP umano e NPC AI: gestisce cura/danno/suprema/autodanno e KO sia su A che su B.
+- UI: pulsantiera mosse di B in alto a sinistra (visibile solo in PvP quando `mostraMoseB`), pulsanti A nascosti durante l'attesa di B. Indicatore turno tematizzato ("Turno del Rivale" / "Turno del Giocatore").
 
 ### ✅ Popolamento allenatori percorsi/città — FATTO
 
@@ -190,10 +195,9 @@ I test coprono solo l'engine puro. Le scene React non hanno test automatici — 
 ## 🎯 Prossimi candidati (in ordine di valore decrescente)
 
 1. **Bilanciamento + polish** (variabile) — playthrough completo, tuning di livelli/monete/cespugli.
-2. **PvP esplicito** (M) — utile solo se vuoi un'esperienza locale a 2 giocatori reali.
-3. **Sprite reali + sfondo mappa** (variabile, asset-pesante) — Fase C polish visivo.
-4. **Deploy GitHub Pages + Tauri** (S+M) — Fase D, solo quando il gameplay è solido.
-5. **Pulsante switch turno A↔B esplicito** — l'unica voce residua di Fase B (oggi auto). Bassa priorità.
+2. **Sprite reali + sfondo mappa** (variabile, asset-pesante) — Fase C polish visivo.
+3. **Deploy GitHub Pages + Tauri** (S+M) — Fase D, solo quando il gameplay è solido.
+4. **Pulsante switch turno A↔B esplicito (in battaglia)** — l'unica voce residua di Fase B; oggi il turno passa automaticamente. Bassa priorità.
 
 Nota: la voce "Mosse di cura HP" è stata chiusa (Fase B). AI ricorre alla cura solo se HP ≤ 30%; lato player la cura consuma il turno e non infligge danno.
 

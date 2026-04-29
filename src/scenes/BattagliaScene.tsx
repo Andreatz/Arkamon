@@ -58,6 +58,8 @@ export function BattagliaScene() {
   const [log, setLog] = useState<string[]>([])
   const [turnoA, setTurnoA] = useState(true)
   const [shaking, setShaking] = useState<'A' | 'B' | null>(null)
+  /** In PvP: vero quando si attende la scelta della mossa di B (input umano). */
+  const [mostraMoseB, setMostraMoseB] = useState(false)
   const [terminata, setTerminata] = useState(false)
   // Evoluzioni accumulate durante la battaglia: applicate dopo, in EvoluzioneScene
   const [evoluzioniInAttesa, setEvoluzioniInAttesa] = useState<
@@ -87,6 +89,7 @@ export function BattagliaScene() {
   const luogoRitorno = battaglia?.luogoRitorno ?? 'mappa-principale'
   const isNPC = !!battaglia && battaglia.tipo !== 'Selvatico' && battaglia.allenatoreId !== undefined
   const isSelvatico = !battaglia || battaglia.tipo === 'Selvatico'
+  const isPvP = !!battaglia && battaglia.tipo === 'PVP'
   const isPercorso = !!luogoRitorno && /^Percorso_/.test(luogoRitorno)
 
   /** Aggiorna l'istanza nella squadra mantenendo l'ordine. */
@@ -119,6 +122,15 @@ export function BattagliaScene() {
   }
 
   if (!pkmnA || !pkmnB) return <div className="text-white p-8">Caricamento...</div>
+
+  const specieB = getPokemon(pkmnB.specieId)!
+
+  /** Handler PvP: il giocatore B clicca una mossa. */
+  const eseguiMossaPvP_B = (numeroMossa: 0 | 1 | 2) => {
+    if (terminata || turnoA || !mostraMoseB) return
+    setMostraMoseB(false)
+    eseguiMossaB(pkmnB, calcolaHPMax(pkmnB), numeroMossa)
+  }
 
   const specieA = getPokemon(pkmnA.specieId)!
   const hpMaxA = calcolaHPMax(pkmnA)
@@ -314,8 +326,12 @@ export function BattagliaScene() {
     setTerminata(true)
   }
 
+  /**
+   * Avvio del turno di B: risolve stato/HP e poi:
+   * - PvP: mostra le mosse di B per input umano (stop, attende click);
+   * - NPC: pesca subito la mossa via AI ed esegue.
+   */
   const turnoAvversario = (statoBcorrente: PokemonIstanza) => {
-    // Risoluzione stato dell'avversario a inizio turno
     const hpMaxBcorrente = calcolaHPMax(statoBcorrente)
     const statoRes = risolviStatoInizioTurno(statoBcorrente, hpMaxBcorrente)
     if (statoRes.messaggi.length > 0) setLog((l) => [...l, ...statoRes.messaggi])
@@ -348,12 +364,31 @@ export function BattagliaScene() {
       return
     }
 
-    const mossa = scegliMossaIA(bEffettivo, pkmnA)
+    if (isPvP) {
+      // Attesa input umano per B: la pulsantiera mosse di B viene mostrata.
+      setMostraMoseB(true)
+      return
+    }
+
+    // NPC: AI sceglie ed esegue subito
+    const mossaIdx = scegliMossaIA(bEffettivo, pkmnA)
+    eseguiMossaB(bEffettivo, hpMaxBcorrente, mossaIdx)
+  }
+
+  /**
+   * Esecuzione della mossa di B (condivisa tra NPC e PvP umano).
+   * Applica cura/suprema/autodanno e gestisce KO.
+   */
+  const eseguiMossaB = (
+    bEffettivo: PokemonIstanza,
+    hpMaxBcorrente: number,
+    mossaIdx: 0 | 1 | 2
+  ) => {
     const specieB = getPokemon(bEffettivo.specieId)
-    const mossaIdB = specieB?.mosse[mossa] ?? null
+    const mossaIdB = specieB?.mosse[mossaIdx] ?? null
     const mossaDefB = mossaIdB ? getMossa(mossaIdB) : null
 
-    // Cura lato AI: l'avversario ripristina HP, niente danno al giocatore.
+    // Cura lato B: ripristina HP, niente danno ad A.
     if (mossaDefB && èMossaCura(mossaDefB)) {
       const cura = applicaMossaCura(bEffettivo, mossaDefB, hpMaxBcorrente)
       setPkmnB(cura.istanza)
@@ -363,7 +398,7 @@ export function BattagliaScene() {
       return
     }
 
-    const ris = calcolaDanno(bEffettivo, pkmnA, mossa)
+    const ris = calcolaDanno(bEffettivo, pkmnA, mossaIdx)
     if (!ris) {
       setTurnoA(true)
       return
@@ -466,22 +501,43 @@ export function BattagliaScene() {
         <p className="text-white text-sm">{log[log.length - 1]}</p>
       </div>
 
-      {/* Pulsanti mosse */}
-      <div className="absolute bottom-4 right-4 grid grid-cols-3 gap-2 z-20">
-        {specieA.mosse.map((mossaId, i) => {
-          const mossa = mossaId ? getMossa(mossaId) : null
-          if (!mossa) return null
-          return (
-            <MoveButton
-              key={i}
-              mossa={mossa}
-              livello={pkmnA.livello}
-              disabled={!turnoA || terminata}
-              onClick={() => eseguiMossa(i as 0 | 1 | 2)}
-            />
-          )
-        })}
-      </div>
+      {/* Pulsanti mosse di A — nascosti in PvP quando aspetta B */}
+      {!mostraMoseB && (
+        <div className="absolute bottom-4 right-4 grid grid-cols-3 gap-2 z-20">
+          {specieA.mosse.map((mossaId, i) => {
+            const mossa = mossaId ? getMossa(mossaId) : null
+            if (!mossa) return null
+            return (
+              <MoveButton
+                key={i}
+                mossa={mossa}
+                livello={pkmnA.livello}
+                disabled={!turnoA || terminata}
+                onClick={() => eseguiMossa(i as 0 | 1 | 2)}
+              />
+            )
+          })}
+        </div>
+      )}
+
+      {/* PvP: pulsanti mosse di B (input umano) */}
+      {isPvP && mostraMoseB && !terminata && (
+        <div className="absolute top-32 left-4 grid grid-cols-3 gap-2 z-20">
+          {specieB.mosse.map((mossaId, i) => {
+            const mossa = mossaId ? getMossa(mossaId) : null
+            if (!mossa) return null
+            return (
+              <MoveButton
+                key={`B-${i}`}
+                mossa={mossa}
+                livello={pkmnB.livello}
+                disabled={terminata}
+                onClick={() => eseguiMossaPvP_B(i as 0 | 1 | 2)}
+              />
+            )
+          })}
+        </div>
+      )}
 
       {/* Pulsanti cattura (solo battaglie selvatiche) */}
       {isSelvatico && !terminata && battaglia && (
@@ -550,7 +606,15 @@ export function BattagliaScene() {
       {/* Indicatore turno */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 arka-panel px-4 py-1">
         <span className="text-sm">
-          {terminata ? 'Battaglia finita' : turnoA ? 'Il tuo turno' : 'Turno avversario...'}
+          {terminata
+            ? 'Battaglia finita'
+            : isPvP && mostraMoseB
+            ? 'Turno del Rivale — scegli una mossa'
+            : isPvP && turnoA
+            ? 'Turno del Giocatore — scegli una mossa'
+            : turnoA
+            ? 'Il tuo turno'
+            : 'Turno avversario...'}
         </span>
       </div>
     </div>
