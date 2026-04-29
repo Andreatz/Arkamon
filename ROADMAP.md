@@ -127,7 +127,6 @@ Le 14 città principali hanno almeno 1 allenatore (NPC o Capopalestra), ma alcun
 - ⏭️ **Mosse di cura HP** a percentuale (l'AI ha già la priorità "CURA" in `scegliMossaIA`, manca l'esecuzione lato player)
 - ⏭️ **Mossa Suprema**: ×2 danno + autodanno 50% HP max
 - ⏭️ **Oggetti**: Masterball (cattura 100%), pozioni, etc.
-- ⏭️ **Pulsante switch turno A↔B esplicito** (oggi auto)
 
 ---
 
