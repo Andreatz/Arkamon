@@ -2,10 +2,11 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
-// Cambia base se pubblichi su GitHub Pages sotto /Arkamon/
+// Cambia base se pubblichi su GitHub Pages sotto /Arkamon-Beta/.
+// Il workflow .github/workflows/deploy.yml setta GITHUB_PAGES=true al build.
 export default defineConfig({
   plugins: [react()],
-  base: process.env.GITHUB_PAGES === 'true' ? '/Arkamon/' : '/',
+  base: process.env.GITHUB_PAGES === 'true' ? '/Arkamon-Beta/' : '/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

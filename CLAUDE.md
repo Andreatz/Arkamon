@@ -29,9 +29,15 @@ Originariamente prototipato in PowerPoint+VBA, ora React/TypeScript.
 ```bash
 npm install      # prima volta
 npm run dev      # http://localhost:3000 con hot reload
-npm run build    # build produzione
+npm run build    # build produzione (base: /)
 npm run preview  # anteprima del build
+GITHUB_PAGES=true npm run build  # build con base /Arkamon-Beta/ per GH Pages
 ```
+
+### Deploy GitHub Pages
+- Workflow automatico in `.github/workflows/deploy.yml` (push su `main` o "Run workflow" manuale).
+- Pubblica su `https://andreatz.github.io/Arkamon-Beta/` — primo deploy: attivare Settings → Pages → Source: "GitHub Actions".
+- I path runtime di asset (`/sprites/...`, `/backgrounds/...`, `/ui/...`, `/maps/...`) **devono** passare per `src/utils/assetUrl.ts`: Vite riscrive solo gli asset importati staticamente, gli altri vanno prefissati con `import.meta.env.BASE_URL` a mano.
 
 ⚠️ **NON eseguire MAI `npm audit fix --force`**: ha già rotto la repo una volta forzando Vite v5 → v8. Se vedi vulnerabilità "moderate" su dev-dependencies, ignorale. Vedi `INSTRUZIONI.md`.
 

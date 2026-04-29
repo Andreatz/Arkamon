@@ -1,5 +1,6 @@
 import { useGameStore } from '@store/gameStore'
 import { motion } from 'framer-motion'
+import { assetUrl } from '@/utils/assetUrl'
 
 /**
  * Schermata titolo.
@@ -14,7 +15,7 @@ export function TitoloScene() {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-arka-bg via-slate-900 to-purple-950">
       <motion.img
-        src="/ui/logo_arkamon.png"
+        src={assetUrl('/ui/logo_arkamon.png')}
         alt="Arkamon"
         className="w-96 max-w-[80%] mb-4 drop-shadow-2xl"
         initial={{ y: -50, opacity: 0 }}

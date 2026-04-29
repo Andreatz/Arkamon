@@ -17,6 +17,7 @@ import { getPokemon, getMossa, getAllenatore } from '@data/index'
 import { calcolaVariazioneMonete, type TipoAvversario } from '@engine/battleEngine'
 import type { PokemonIstanza, MossaDef, StatoAlterato } from '@/types'
 import { getBackground, BATTLE_BG_DEFAULT } from '@data/backgrounds'
+import { assetUrl } from '@/utils/assetUrl'
 
 const STATO_BADGE: Record<StatoAlterato, { label: string; color: string; emoji: string }> = {
   Confuso: { label: 'CONF', color: 'bg-fuchsia-500', emoji: '💫' },
@@ -746,7 +747,7 @@ function PokemonBattleSlot({
   const posClass = isPlayer ? 'bottom-32 left-12 flex-row' : 'top-12 right-12 flex-row-reverse'
   // Vista posteriore per il giocatore (visto da dietro), frontale per l'avversario.
   const spriteFolder = isPlayer ? 'back_sprites' : 'front_sprites'
-  const spriteSrc = `/sprites/${spriteFolder}/${istanza.specieId}.png`
+  const spriteSrc = assetUrl(`/sprites/${spriteFolder}/${istanza.specieId}.png`)
   const isKO = istanza.hp <= 0
 
   // shaking = sto subendo un colpo; lunging = sto attaccando (slancio verso il bersaglio).
