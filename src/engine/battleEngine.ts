@@ -285,10 +285,6 @@ export function calcolaDanno(
 // =============================================================
 // MOSSA SUPREMA (Fase B)
 // =============================================================
-//
-// Una "mossa suprema" infligge danno doppio al difensore ma fa anche
-// subire all'attaccante un autodanno pari al `valoreEffetto`% del suo
-// hpMax (default 50% se valoreEffetto è null).
 
 /** True se la mossa è classificata Suprema. */
 export function èMossaSuprema(mossa: MossaDef): boolean {
@@ -309,12 +305,6 @@ export function autodannoSuprema(
 // MOSSE DI CURA (Fase B)
 // =============================================================
 //
-// Le mosse curative non infliggono danno: ripristinano HP all'attaccante.
-// Distinzione:
-// - effetto: 'CURA'      → cura piatta di `valoreEffetto` HP
-// - effetto: 'CURA_PCT'  → cura `valoreEffetto`% di hpMax (1..100)
-// In entrambi i casi la cura non può oltrepassare hpMax.
-//
 // BR.3: se l'attaccante è Avvelenato, la cura rimuove anche il veleno.
 
 export const EFFETTI_CURA = new Set(['CURA', 'CURA_PCT'])
@@ -326,7 +316,6 @@ export function èMossaCura(mossa: MossaDef): boolean {
 
 /**
  * Applica una mossa di cura sull'attaccante stesso.
- * Restituisce un risultato con hp aggiornati e messaggi.
  *
  * BR.3: se l'attaccante è Avvelenato, lo stato viene rimosso
  * automaticamente (anche se gli HP sono già al massimo).
@@ -389,6 +378,7 @@ export function applicaMossaCura(
 // =============================================================
 
 // Porting di: EseguiAzioneCattura da old_files/Mod_Battle_Engine.txt
+// BR.3: formula riallineata al VBA → tasso * (3 - hp/hpMax) [più generosa di (2 -)]
 export function tentaCattura(
   bersaglio: PokemonIstanza,
   rng: () => number = Math.random
@@ -399,7 +389,7 @@ export function tentaCattura(
   const tasso = Math.max(1, specie.tassoCattura)
   const hpMax = calcolaHPMax(bersaglio)
   const roll = rollD6(1, rng) + rollD6(1, rng) + rollD6(1, rng) // 3..18
-  const soglia = tasso * (2 - bersaglio.hp / hpMax)
+  const soglia = tasso * (3 - bersaglio.hp / hpMax)
   return { riuscita: roll <= soglia, roll, soglia }
 }
 
@@ -438,7 +428,6 @@ export function scegliMossaIA(
       punteggio = hpRatio <= 0.3 ? 100 : -1
     }
     if (èMossaSuprema(mossa)) {
-      // Usa la suprema solo se ha HP sufficienti per non auto-KO
       const pctAuto = (mossa.valoreEffetto ?? 50) / 100
       punteggio = hpRatio > pctAuto + 0.05 ? punteggio * 2 : -1
     }
@@ -456,8 +445,6 @@ export function scegliMossaIA(
 
 // =============================================================
 // LIVELLI ED EVOLUZIONI
-// Regola di gioco: 1 XP per nemico sconfitto, 1 XP = 1 livello,
-// livello massimo 100. Per arrivare a lv 100 servono 99 KO.
 // =============================================================
 
 export const LIVELLO_MAX = 100
@@ -542,7 +529,7 @@ export function calcolaVariazioneMonete(
   if (esito === 'vittoria') {
     if (tipoAvversario === 'NPC') return 200
     if (tipoAvversario === 'Capopalestra') return 1000
-    return 0 // Selvatico/PVP: niente monete
+    return 0
   }
   if (tipoAvversario === 'NPC' || tipoAvversario === 'Capopalestra') return -200
   return 0

@@ -56,8 +56,6 @@ describe('calcolaHPMax', () => {
 })
 
 describe('efficaciaTipo (matrice tipi)', () => {
-  // superefficace = ×1.5 (valore di bilanciamento del database originale,
-  // non il classico ×2). Fonte: old_files/Database.xlsx foglio Tipi.
   it('Acqua → Fuoco === 1.5 (superefficace)', () => {
     expect(efficaciaTipo('Acqua', 'Fuoco')).toBe(1.5)
   })
@@ -114,18 +112,28 @@ describe('applicaXP (regola: 1 xp = 1 livello, cap a 100)', () => {
   })
 })
 
-describe('tentaCattura', () => {
-  it('rng=0 (roll=3), tasso=5, hp pieno → riuscita=true (soglia=5)', () => {
+describe('tentaCattura — formula VBA (3 - hp/hpMax)', () => {
+  // BR.3: formula riallineata al VBA → soglia = tasso * (3 - hp/hpMax)
+  // A HP pieno (12/12): soglia = 5 * (3 - 1) = 10
+  // A HP vuoto (0/12): soglia = 5 * (3 - 0) = 15
+  it('rng=0 (roll=3), tasso=5, hp pieno → soglia=10, riuscita=true', () => {
     const v = mkIstanza(1, 5) // Vyrath, tasso=5, hp=12 di 12
     const ris = tentaCattura(v, () => 0)
     expect(ris.roll).toBe(3)
-    expect(ris.soglia).toBe(5)
+    expect(ris.soglia).toBe(10)
     expect(ris.riuscita).toBe(true)
   })
-  it('rng=0.99 (roll=18), tasso=5, hp pieno → riuscita=false', () => {
+  it('rng=0.99 (roll=18), tasso=5, hp pieno → soglia=10, riuscita=false', () => {
     const v = mkIstanza(1, 5)
     const ris = tentaCattura(v, () => 0.99)
     expect(ris.roll).toBe(18)
+    expect(ris.soglia).toBe(10)
     expect(ris.riuscita).toBe(false)
+  })
+  it('hp a metà (6/12) → soglia=12.5, più generosa di hp pieno', () => {
+    const v = mkIstanza(1, 5, 6) // hp = 6 di 12
+    const ris = tentaCattura(v, () => 0) // roll=3
+    expect(ris.soglia).toBeCloseTo(12.5)
+    expect(ris.riuscita).toBe(true)
   })
 })
