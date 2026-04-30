@@ -72,10 +72,6 @@ export function BattagliaScene() {
   const [scambioRichiesto, setScambioRichiesto] = useState<PendingSwitch | null>(null)
   /**
    * In PvP: pausa esplicita tra fine turno corrente e inizio turno successivo.
-   * Mostra un pulsante "Passa il controllo a ..." che il giocatore deve cliccare
-   * per evitare che chi sta passando il PC veda le mosse dell'altro.
-   * - 'A→B' richiede `pendingB` (verrà passato a turnoAvversario al click)
-   * - 'B→A' nessun payload: al click si limita a riassegnare il turno ad A
    */
   const [attesaPassaggio, setAttesaPassaggio] = useState<
     | { direzione: 'A→B'; pendingB: PokemonIstanza }
@@ -83,7 +79,6 @@ export function BattagliaScene() {
     | null
   >(null)
   const [terminata, setTerminata] = useState(false)
-  // Evoluzioni accumulate durante la battaglia: applicate dopo, in EvoluzioneScene
   const [evoluzioniInAttesa, setEvoluzioniInAttesa] = useState<
     { istanzaId: string; oldSpecieId: number; newSpecieId: number }[]
   >([])
@@ -96,7 +91,6 @@ export function BattagliaScene() {
       setSquadraB(battaglia.squadraB ?? [battaglia.pokemonB])
       setLog(battaglia.log)
     } else {
-      // Fallback demo: Vyrath vs Weedrug lvl 5
       const a = creaIstanza(1, 5)
       const b = creaIstanza(13, 5)
       setPkmnA(a)
@@ -114,14 +108,11 @@ export function BattagliaScene() {
   const isPvP = !!battaglia && battaglia.tipo === 'PVP'
   const isPercorso = !!luogoRitorno && /^Percorso_/.test(luogoRitorno)
 
-  /** Aggiorna l'istanza nella squadra mantenendo l'ordine. */
   const updateInSquadra = (squadra: PokemonIstanza[], updated: PokemonIstanza) =>
     squadra.map((p) => (p.istanzaId === updated.istanzaId ? updated : p))
 
   const tornaIndietro = () => {
     if (isNPC && esito) risolviBattagliaNPC(esito)
-    // Persiste tutte le modifiche (livello, xp). L'evoluzione vera e propria
-    // (cambio di specieId) avviene dopo, nella EvoluzioneScene.
     for (const p of squadraA) aggiornaPokemon(giocatoreAttivo, p)
     terminaBattaglia(true)
 
@@ -147,18 +138,12 @@ export function BattagliaScene() {
 
   const specieB = getPokemon(pkmnB.specieId)!
 
-  /** Handler PvP: il giocatore B clicca una mossa. */
   const eseguiMossaPvP_B = (numeroMossa: 0 | 1 | 2) => {
     if (terminata || turnoA || !mostraMoseB) return
     setMostraMoseB(false)
     eseguiMossaB(pkmnB, calcolaHPMax(pkmnB), numeroMossa)
   }
 
-  /**
-   * Termina il turno del giocatore A.
-   * - PvP: pausa esplicita; il giocatore deve cliccare "Passa il controllo".
-   * - NPC/Selvatico: mostra il pulsante "Avversario..." nell'InfoBox.
-   */
   const passaTurnoAaB = (nuovoB: PokemonIstanza, delayMs = 1500) => {
     setTurnoA(false)
     if (isPvP) {
@@ -168,11 +153,6 @@ export function BattagliaScene() {
     window.setTimeout(() => setAttesaAvversario(nuovoB), Math.min(delayMs, 250))
   }
 
-  /**
-   * Termina il turno di B.
-   * - PvP: pausa esplicita prima di ridare il turno ad A.
-   * - NPC: turno ad A immediato.
-   */
   const passaTurnoBaA = () => {
     setAttesaAvversario(null)
     if (isPvP) {
@@ -182,7 +162,6 @@ export function BattagliaScene() {
     setTurnoA(true)
   }
 
-  /** Click sul pulsante esplicito di passaggio turno (solo PvP). */
   const confermaPassaggio = () => {
     if (!attesaPassaggio) return
     if (attesaPassaggio.direzione === 'A→B') {
@@ -233,13 +212,6 @@ export function BattagliaScene() {
   const hpMaxA = calcolaHPMax(pkmnA)
   const hpMaxB = calcolaHPMax(pkmnB)
 
-  /**
-   * Premia pokemonA con XP per il nemico sconfitto, gestisce level-up.
-   * L'eventuale evoluzione viene accodata in `evoluzioniInAttesa` e
-   * processata dopo la fine della battaglia nella EvoluzioneScene
-   * (NON applicata inline qui, per coerenza con il flusso classico
-   * "vittoria → schermata evoluzione").
-   */
   const premiaConXP = (
     attivo: PokemonIstanza,
     sconfitto: PokemonIstanza
@@ -250,7 +222,6 @@ export function BattagliaScene() {
       messaggi.push(`${attivo.nome} è salito al livello ${xpRes.istanza.livello}!`)
     }
     if (xpRes.evoluzionePendente) {
-      // Solo log + accumulo. L'evoluzione viene applicata in EvoluzioneScene.
       messaggi.push(`${attivo.nome} sembra cambiare... (evolverà a fine battaglia)`)
       setEvoluzioniInAttesa((prev) => [
         ...prev,
@@ -268,7 +239,6 @@ export function BattagliaScene() {
   const eseguiMossa = (numeroMossa: 0 | 1 | 2) => {
     if (terminata || !turnoA) return
 
-    // Risoluzione stato a inizio turno (avvelenamento/sonno/confusione)
     const statoRes = risolviStatoInizioTurno(pkmnA, hpMaxA)
     if (statoRes.messaggi.length > 0) setLog((l) => [...l, ...statoRes.messaggi])
     const pkmnAEffettivo = statoRes.istanza
@@ -276,7 +246,6 @@ export function BattagliaScene() {
     setSquadraA((sq) => updateInSquadra(sq, pkmnAEffettivo))
 
     if (pkmnAEffettivo.hp <= 0) {
-      // Avvelenamento o auto-danno confusione ha ucciso pokemonA
       const nextA = squadraA.find(
         (p) => p.istanzaId !== pkmnAEffettivo.istanzaId && p.hp > 0
       )
@@ -295,12 +264,10 @@ export function BattagliaScene() {
     }
 
     if (!statoRes.puoAgire) {
-      // Turno saltato: passa all'avversario
       passaTurnoAaB(pkmnB, 1200)
       return
     }
 
-    // Mossa di cura: niente danno al nemico, solo ripristino HP all'attaccante.
     const mossaScelta = specieA.mosse[numeroMossa]
       ? getMossa(specieA.mosse[numeroMossa]!)
       : null
@@ -328,7 +295,6 @@ export function BattagliaScene() {
 
     setTimeout(() => setShaking(null), 400)
 
-    // Autodanno mossa Suprema sull'attaccante (può auto-KO)
     let aDopoAutodanno = pkmnAEffettivo
     if (ris.autodanno && ris.autodanno > 0) {
       aDopoAutodanno = {
@@ -340,29 +306,26 @@ export function BattagliaScene() {
     }
 
     if (nuovoB.hp <= 0) {
-      // XP a pokemonA per il KO (regola: 1 nemico = 1 xp = 1 livello)
       const aggiornatoA = premiaConXP(aDopoAutodanno, nuovoB)
       setPkmnA(aggiornatoA)
       setSquadraA((sq) => updateInSquadra(sq, aggiornatoA))
 
-      // Cerca prossimo nemico vivo
       const nextB = nuovaSquadraB.find(
         (p) => p.istanzaId !== nuovoB.istanzaId && p.hp > 0
       )
       if (nextB && isNPC) {
         setLog((l) => [...l, `L'avversario manda in campo ${nextB.nome}!`])
         setPkmnB(nextB)
-        // Il giocatore mantiene il turno dopo il KO + switch nemico
+        // BR.3: il nuovo Pokémon nemico attacca subito (VBA: Cells(12,2)="B")
+        passaTurnoAaB(nextB, 800)
         return
       }
-      // Nessun altro avversario → vittoria
       setLog((l) => [...l, 'Hai vinto la battaglia!'])
       setEsito('vittoria')
       setTerminata(true)
       return
     }
 
-    // Auto-KO da mossa Suprema: gestisci switch o sconfitta
     if (aDopoAutodanno.hp <= 0) {
       const nextA = squadraA.find(
         (p) => p.istanzaId !== aDopoAutodanno.istanzaId && p.hp > 0
@@ -377,7 +340,6 @@ export function BattagliaScene() {
           prossimoPasso: 'passaAB',
           pendingB: nuovoB,
         })
-        // Turno passa comunque all'avversario (la mossa è stata usata)
         return
       }
       setLog((l) => [...l, 'Hai perso la battaglia...'])
@@ -386,7 +348,6 @@ export function BattagliaScene() {
       return
     }
 
-    // Turno avversario dopo 1.5s
     passaTurnoAaB(nuovoB, 1500)
   }
 
@@ -406,12 +367,10 @@ export function BattagliaScene() {
       return
     }
     setLog((l) => [...l, `${pkmnB.nome} è scappato dalla pokeball!`])
-    // Cattura fallita = il turno è perso → tocca al selvatico
     setTurnoA(false)
     setAttesaAvversario(pkmnB)
   }
 
-  /** Cattura garantita al 100% via Masterball (consuma 1 oggetto). */
   const eseguiMasterball = () => {
     if (terminata || !turnoA) return
     if (!usaOggetto(giocatoreAttivo, 'masterball')) return
@@ -425,11 +384,6 @@ export function BattagliaScene() {
     setTerminata(true)
   }
 
-  /**
-   * Avvio del turno di B: risolve stato/HP e poi:
-   * - PvP: mostra le mosse di B per input umano (stop, attende click);
-   * - NPC: pesca subito la mossa via AI ed esegue.
-   */
   const turnoAvversario = (statoBcorrente: PokemonIstanza) => {
     const hpMaxBcorrente = calcolaHPMax(statoBcorrente)
     const statoRes = risolviStatoInizioTurno(statoBcorrente, hpMaxBcorrente)
@@ -448,7 +402,6 @@ export function BattagliaScene() {
         setTurnoA(true)
         return
       }
-      // Vittoria del giocatore via danno da stato
       const aggiornatoA = premiaConXP(pkmnA, bEffettivo)
       setPkmnA(aggiornatoA)
       setSquadraA((sq) => updateInSquadra(sq, aggiornatoA))
@@ -464,20 +417,14 @@ export function BattagliaScene() {
     }
 
     if (isPvP) {
-      // Attesa input umano per B: la pulsantiera mosse di B viene mostrata.
       setMostraMoseB(true)
       return
     }
 
-    // NPC: AI sceglie ed esegue subito
     const mossaIdx = scegliMossaIA(bEffettivo, pkmnA)
     eseguiMossaB(bEffettivo, hpMaxBcorrente, mossaIdx)
   }
 
-  /**
-   * Esecuzione della mossa di B (condivisa tra NPC e PvP umano).
-   * Applica cura/suprema/autodanno e gestisce KO.
-   */
   const eseguiMossaB = (
     bEffettivo: PokemonIstanza,
     hpMaxBcorrente: number,
@@ -487,7 +434,6 @@ export function BattagliaScene() {
     const mossaIdB = specieB?.mosse[mossaIdx] ?? null
     const mossaDefB = mossaIdB ? getMossa(mossaIdB) : null
 
-    // Cura lato B: ripristina HP, niente danno ad A.
     if (mossaDefB && èMossaCura(mossaDefB)) {
       const cura = applicaMossaCura(bEffettivo, mossaDefB, hpMaxBcorrente)
       setPkmnB(cura.istanza)
@@ -513,7 +459,6 @@ export function BattagliaScene() {
     setLog((l) => [...l, ...ris.messaggi])
     setTimeout(() => setShaking(null), 400)
 
-    // Autodanno mossa Suprema lato AI
     let bDopoAutodanno = bEffettivo
     if (ris.autodanno && ris.autodanno > 0) {
       bDopoAutodanno = {
@@ -545,7 +490,6 @@ export function BattagliaScene() {
       return
     }
 
-    // Auto-KO lato AI da mossa Suprema
     if (bDopoAutodanno.hp <= 0) {
       const nextB = squadraB.find(
         (p) => p.istanzaId !== bDopoAutodanno.istanzaId && p.hp > 0
@@ -593,7 +537,6 @@ export function BattagliaScene() {
       <div className="absolute inset-0 bg-gradient-to-b from-slate-950/10 via-transparent to-slate-950/60 pointer-events-none" />
       <div className="absolute inset-x-0 bottom-0 h-[30%] bg-gradient-to-t from-slate-950/80 to-transparent pointer-events-none" />
 
-      {/* Indicatore squadra (solo NPC) */}
       {isNPC && (
         <>
           <SquadIndicator squadra={squadraB} position="top-left" />
@@ -601,7 +544,6 @@ export function BattagliaScene() {
         </>
       )}
 
-      {/* Pokémon avversario (alto a destra) — chiave su istanzaId per riattivare slide-in al cambio */}
       <AnimatePresence mode="popLayout">
         <PokemonBattleSlot
           key={pkmnB.istanzaId}
@@ -612,7 +554,6 @@ export function BattagliaScene() {
         />
       </AnimatePresence>
 
-      {/* Pokémon giocatore (basso a sinistra) */}
       <AnimatePresence mode="popLayout">
         <PokemonBattleSlot
           key={pkmnA.istanzaId}
@@ -643,14 +584,12 @@ export function BattagliaScene() {
         className="top-[55%] left-[33%]"
       />
 
-      {/* InfoBox eventi */}
       <InfoBox
         messaggi={log}
         showOpponentButton={!!attesaAvversario && !terminata}
         onOpponentTurn={confermaTurnoAvversario}
       />
 
-      {/* Pulsanti mosse di A — nascosti in PvP quando aspetta B o passaggio turno */}
       {!terminata && !mostraMoseB && !attesaPassaggio && !attesaAvversario && !scambioRichiesto && (
         <div className="absolute bottom-5 right-6 z-30 w-[min(52vw,760px)] rounded-lg border border-white/15 bg-slate-950/80 p-3 shadow-2xl backdrop-blur-sm">
           <div
@@ -683,7 +622,6 @@ export function BattagliaScene() {
         </div>
       )}
 
-      {/* PvP: pulsanti mosse di B (input umano) */}
       {isPvP && mostraMoseB && !terminata && !scambioRichiesto && (
         <div className="absolute top-28 left-6 z-30 w-[min(52vw,760px)] rounded-lg border border-white/15 bg-slate-950/80 p-3 shadow-2xl backdrop-blur-sm">
           <div
@@ -703,7 +641,6 @@ export function BattagliaScene() {
         </div>
       )}
 
-      {/* Pulsante esplicito di passaggio turno (solo PvP) */}
       {isPvP && attesaPassaggio && !terminata && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30">
           <motion.button
@@ -718,7 +655,6 @@ export function BattagliaScene() {
         </div>
       )}
 
-      {/* Esito + monete (solo battaglie NPC/Capopalestra) */}
       {terminata && isNPC && esito && (() => {
         const allenatore = battaglia?.allenatoreId !== undefined
           ? getAllenatore(battaglia.allenatoreId)
@@ -741,7 +677,6 @@ export function BattagliaScene() {
         )
       })()}
 
-      {/* Pulsante exit */}
       {terminata && (
         <button
           className="arka-button absolute bottom-4 left-4 z-20"
@@ -755,7 +690,6 @@ export function BattagliaScene() {
         </button>
       )}
 
-      {/* Indicatore turno */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 arka-panel px-4 py-1">
         <span className="text-sm">
           {terminata
@@ -940,12 +874,10 @@ function PokemonBattleSlot({
   const spriteSizeClass = isPlayer
     ? 'w-[clamp(250px,23vw,370px)] h-[clamp(250px,23vw,370px)]'
     : 'w-[clamp(210px,19vw,320px)] h-[clamp(210px,19vw,320px)]'
-  // Vista posteriore per il giocatore (visto da dietro), frontale per l'avversario.
   const spriteFolder = isPlayer ? 'back_sprites' : 'front_sprites'
   const spriteSrc = assetUrl(`/sprites/${spriteFolder}/${istanza.specieId}.png`)
   const isKO = istanza.hp <= 0
 
-  // shaking = sto subendo un colpo; lunging = sto attaccando (slancio verso il bersaglio).
   const innerAnim = shaking
     ? { x: [0, -8, 8, -8, 8, 0] }
     : lunging
@@ -974,7 +906,6 @@ function PokemonBattleSlot({
           alt={istanza.nome}
           className="w-full h-full object-contain"
           onError={(e) => {
-            // Fallback emoji se lo sprite non esiste
             ;(e.currentTarget as HTMLImageElement).style.display = 'none'
             const sib = e.currentTarget.nextElementSibling as HTMLElement | null
             if (sib) sib.style.display = 'flex'
@@ -987,7 +918,6 @@ function PokemonBattleSlot({
           {isPlayer ? '🐺' : '🦈'}
         </span>
       </motion.div>
-
     </motion.div>
   )
 }
