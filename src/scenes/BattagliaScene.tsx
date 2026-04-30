@@ -1,5 +1,5 @@
 import { useGameStore, creaIstanza } from '@store/gameStore'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   calcolaDanno,
@@ -25,12 +25,18 @@ const STATO_BADGE: Record<StatoAlterato, { label: string; color: string; emoji: 
   Avvelenato: { label: 'PSN', color: 'bg-purple-600', emoji: '☠️' },
 }
 
+type PendingSwitch = {
+  motivo: string
+  prossimoPasso: 'continuaA' | 'passaAdA' | 'passaAB'
+  pendingB?: PokemonIstanza
+}
+
 /**
  * Scena di battaglia.
  *
  * Supporta:
  * - Battaglie selvatiche (1 vs 1) con cattura
- * - Battaglie NPC/PVP multi-pokemon (switch automatico su KO)
+ * - Battaglie NPC/PVP multi-pokemon (scambio manuale su KO del giocatore)
  * - XP per nemico sconfitto (1 KO = 1 livello, cap 100)
  * - Evoluzioni inline al raggiungimento della soglia
  *
@@ -62,6 +68,8 @@ export function BattagliaScene() {
   const [shaking, setShaking] = useState<'A' | 'B' | null>(null)
   /** In PvP: vero quando si attende la scelta della mossa di B (input umano). */
   const [mostraMoseB, setMostraMoseB] = useState(false)
+  const [attesaAvversario, setAttesaAvversario] = useState<PokemonIstanza | null>(null)
+  const [scambioRichiesto, setScambioRichiesto] = useState<PendingSwitch | null>(null)
   /**
    * In PvP: pausa esplicita tra fine turno corrente e inizio turno successivo.
    * Mostra un pulsante "Passa il controllo a ..." che il giocatore deve cliccare
@@ -149,7 +157,7 @@ export function BattagliaScene() {
   /**
    * Termina il turno del giocatore A.
    * - PvP: pausa esplicita; il giocatore deve cliccare "Passa il controllo".
-   * - NPC/Selvatico: il turno passa automaticamente dopo `delayMs`.
+   * - NPC/Selvatico: mostra il pulsante "Avversario..." nell'InfoBox.
    */
   const passaTurnoAaB = (nuovoB: PokemonIstanza, delayMs = 1500) => {
     setTurnoA(false)
@@ -157,7 +165,7 @@ export function BattagliaScene() {
       setAttesaPassaggio({ direzione: 'A→B', pendingB: nuovoB })
       return
     }
-    setTimeout(() => turnoAvversario(nuovoB), delayMs)
+    window.setTimeout(() => setAttesaAvversario(nuovoB), Math.min(delayMs, 250))
   }
 
   /**
@@ -166,6 +174,7 @@ export function BattagliaScene() {
    * - NPC: turno ad A immediato.
    */
   const passaTurnoBaA = () => {
+    setAttesaAvversario(null)
     if (isPvP) {
       setAttesaPassaggio({ direzione: 'B→A' })
       return
@@ -184,6 +193,40 @@ export function BattagliaScene() {
       setAttesaPassaggio(null)
       setTurnoA(true)
     }
+  }
+
+  const confermaTurnoAvversario = () => {
+    if (!attesaAvversario) return
+    const pendingB = attesaAvversario
+    setAttesaAvversario(null)
+    turnoAvversario(pendingB)
+  }
+
+  const apriScambio = (richiesta: PendingSwitch) => {
+    setMostraMoseB(false)
+    setAttesaAvversario(null)
+    setLog((l) => [...l, 'Scegli un Pokemon dalla squadra.'])
+    setScambioRichiesto(richiesta)
+  }
+
+  const scegliPokemonCambio = (scelto: PokemonIstanza) => {
+    if (!scambioRichiesto || scelto.hp <= 0) return
+    const richiesta = scambioRichiesto
+    setPkmnA(scelto)
+    setScambioRichiesto(null)
+    setLog((l) => [...l, `${scelto.nome} entra in campo!`])
+
+    if (richiesta.prossimoPasso === 'passaAB') {
+      passaTurnoAaB(richiesta.pendingB ?? pkmnB, 300)
+      return
+    }
+
+    if (richiesta.prossimoPasso === 'passaAdA') {
+      passaTurnoBaA()
+      return
+    }
+
+    setTurnoA(true)
   }
 
   const specieA = getPokemon(pkmnA.specieId)!
@@ -238,8 +281,11 @@ export function BattagliaScene() {
         (p) => p.istanzaId !== pkmnAEffettivo.istanzaId && p.hp > 0
       )
       if (nextA) {
-        setLog((l) => [...l, `${pkmnAEffettivo.nome} è caduto! Mandi in campo ${nextA.nome}!`])
-        setPkmnA(nextA)
+        setLog((l) => [...l, `${pkmnAEffettivo.nome} e caduto!`])
+        apriScambio({
+          motivo: `${pkmnAEffettivo.nome} non puo continuare.`,
+          prossimoPasso: 'continuaA',
+        })
         return
       }
       setLog((l) => [...l, 'Hai perso la battaglia...'])
@@ -324,11 +370,14 @@ export function BattagliaScene() {
       if (nextA) {
         setLog((l) => [
           ...l,
-          `${aDopoAutodanno.nome} è esausto! Mandi in campo ${nextA.nome}!`,
+          `${aDopoAutodanno.nome} e esausto!`,
         ])
-        setPkmnA(nextA)
+        apriScambio({
+          motivo: `${aDopoAutodanno.nome} non puo continuare.`,
+          prossimoPasso: 'passaAB',
+          pendingB: nuovoB,
+        })
         // Turno passa comunque all'avversario (la mossa è stata usata)
-        passaTurnoAaB(nuovoB, 1500)
         return
       }
       setLog((l) => [...l, 'Hai perso la battaglia...'])
@@ -359,7 +408,7 @@ export function BattagliaScene() {
     setLog((l) => [...l, `${pkmnB.nome} è scappato dalla pokeball!`])
     // Cattura fallita = il turno è perso → tocca al selvatico
     setTurnoA(false)
-    setTimeout(() => turnoAvversario(pkmnB), 1500)
+    setAttesaAvversario(pkmnB)
   }
 
   /** Cattura garantita al 100% via Masterball (consuma 1 oggetto). */
@@ -482,10 +531,12 @@ export function BattagliaScene() {
       if (nextA) {
         setLog((l) => [
           ...l,
-          `${nuovoA.nome} è KO! Mandi in campo ${nextA.nome}!`,
+          `${nuovoA.nome} e KO!`,
         ])
-        setPkmnA(nextA)
-        passaTurnoBaA()
+        apriScambio({
+          motivo: `${nuovoA.nome} e KO.`,
+          prossimoPasso: 'passaAdA',
+        })
         return
       }
       setLog((l) => [...l, 'Hai perso la battaglia...'])
@@ -521,12 +572,27 @@ export function BattagliaScene() {
   }
 
   const bgBattaglia = getBackground(luogoRitorno) ?? BATTLE_BG_DEFAULT
+  const mosseA = specieA.mosse
+    .map((mossaId, i) => {
+      const mossa = mossaId ? getMossa(mossaId) : null
+      return mossa ? { mossa, idx: i as 0 | 1 | 2 } : null
+    })
+    .filter((entry): entry is { mossa: MossaDef; idx: 0 | 1 | 2 } => entry !== null)
+  const mosseB = specieB.mosse
+    .map((mossaId, i) => {
+      const mossa = mossaId ? getMossa(mossaId) : null
+      return mossa ? { mossa, idx: i as 0 | 1 | 2 } : null
+    })
+    .filter((entry): entry is { mossa: MossaDef; idx: 0 | 1 | 2 } => entry !== null)
 
   return (
     <div
       className="w-full h-full relative bg-cover bg-center"
       style={{ backgroundImage: `url(${bgBattaglia})` }}
     >
+      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/10 via-transparent to-slate-950/60 pointer-events-none" />
+      <div className="absolute inset-x-0 bottom-0 h-[30%] bg-gradient-to-t from-slate-950/80 to-transparent pointer-events-none" />
+
       {/* Indicatore squadra (solo NPC) */}
       {isNPC && (
         <>
@@ -540,7 +606,6 @@ export function BattagliaScene() {
         <PokemonBattleSlot
           key={pkmnB.istanzaId}
           istanza={pkmnB}
-          hpMax={hpMaxB}
           position="top-right"
           shaking={shaking === 'B'}
           lunging={shaking === 'A'}
@@ -552,80 +617,89 @@ export function BattagliaScene() {
         <PokemonBattleSlot
           key={pkmnA.istanzaId}
           istanza={pkmnA}
-          hpMax={hpMaxA}
           position="bottom-left"
           shaking={shaking === 'A'}
           lunging={shaking === 'B'}
         />
       </AnimatePresence>
 
-      {/* Box log eventi */}
-      <div className="absolute bottom-32 left-1/2 -translate-x-1/2 arka-panel px-6 py-3 max-w-md">
-        <p className="text-white text-sm">{log[log.length - 1]}</p>
-      </div>
+      <HpBar
+        nome={pkmnB.nome}
+        livello={pkmnB.livello}
+        hp={pkmnB.hp}
+        hpMax={hpMaxB}
+        stato={pkmnB.stato?.tipo}
+        side="enemy"
+        className="top-[17%] right-[24%]"
+      />
+
+      <HpBar
+        nome={pkmnA.nome}
+        livello={pkmnA.livello}
+        hp={pkmnA.hp}
+        hpMax={hpMaxA}
+        stato={pkmnA.stato?.tipo}
+        side="player"
+        className="top-[55%] left-[33%]"
+      />
+
+      {/* InfoBox eventi */}
+      <InfoBox
+        messaggi={log}
+        showOpponentButton={!!attesaAvversario && !terminata}
+        onOpponentTurn={confermaTurnoAvversario}
+      />
 
       {/* Pulsanti mosse di A — nascosti in PvP quando aspetta B o passaggio turno */}
-      {!mostraMoseB && !attesaPassaggio && (
-        <div className="absolute bottom-4 right-4 grid grid-cols-3 gap-2 z-20">
-          {specieA.mosse.map((mossaId, i) => {
-            const mossa = mossaId ? getMossa(mossaId) : null
-            if (!mossa) return null
-            return (
+      {!terminata && !mostraMoseB && !attesaPassaggio && !attesaAvversario && !scambioRichiesto && (
+        <div className="absolute bottom-5 right-6 z-30 w-[min(52vw,760px)] rounded-lg border border-white/15 bg-slate-950/80 p-3 shadow-2xl backdrop-blur-sm">
+          <div
+            className="grid gap-3"
+            style={{ gridTemplateColumns: `repeat(${Math.max(1, mosseA.length)}, minmax(0, 1fr))` }}
+          >
+            {mosseA.map(({ mossa, idx }) => (
               <MoveButton
-                key={i}
+                key={idx}
                 mossa={mossa}
                 livello={pkmnA.livello}
-                disabled={!turnoA || terminata}
-                onClick={() => eseguiMossa(i as 0 | 1 | 2)}
+                disabled={!turnoA}
+                onClick={() => eseguiMossa(idx)}
               />
-            )
-          })}
+            ))}
+          </div>
+
+          {isSelvatico && battaglia && (
+            <div className="mt-3 flex justify-end gap-2">
+              <ActionButton disabled={!turnoA} onClick={eseguiCattura}>
+                Cattura
+              </ActionButton>
+              {masterballRimaste > 0 && (
+                <ActionButton disabled={!turnoA} onClick={eseguiMasterball}>
+                  Masterball x{masterballRimaste}
+                </ActionButton>
+              )}
+            </div>
+          )}
         </div>
       )}
 
       {/* PvP: pulsanti mosse di B (input umano) */}
-      {isPvP && mostraMoseB && !terminata && (
-        <div className="absolute top-32 left-4 grid grid-cols-3 gap-2 z-20">
-          {specieB.mosse.map((mossaId, i) => {
-            const mossa = mossaId ? getMossa(mossaId) : null
-            if (!mossa) return null
-            return (
+      {isPvP && mostraMoseB && !terminata && !scambioRichiesto && (
+        <div className="absolute top-28 left-6 z-30 w-[min(52vw,760px)] rounded-lg border border-white/15 bg-slate-950/80 p-3 shadow-2xl backdrop-blur-sm">
+          <div
+            className="grid gap-3"
+            style={{ gridTemplateColumns: `repeat(${Math.max(1, mosseB.length)}, minmax(0, 1fr))` }}
+          >
+            {mosseB.map(({ mossa, idx }) => (
               <MoveButton
-                key={`B-${i}`}
+                key={`B-${idx}`}
                 mossa={mossa}
                 livello={pkmnB.livello}
-                disabled={terminata}
-                onClick={() => eseguiMossaPvP_B(i as 0 | 1 | 2)}
+                disabled={false}
+                onClick={() => eseguiMossaPvP_B(idx)}
               />
-            )
-          })}
-        </div>
-      )}
-
-      {/* Pulsanti cattura (solo battaglie selvatiche) */}
-      {isSelvatico && !terminata && battaglia && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
-          <motion.button
-            whileHover={turnoA ? { scale: 1.05 } : {}}
-            whileTap={turnoA ? { scale: 0.95 } : {}}
-            disabled={!turnoA}
-            onClick={eseguiCattura}
-            className="arka-button disabled:opacity-50"
-          >
-            🟡 Cattura
-          </motion.button>
-          {masterballRimaste > 0 && (
-            <motion.button
-              whileHover={turnoA ? { scale: 1.05 } : {}}
-              whileTap={turnoA ? { scale: 0.95 } : {}}
-              disabled={!turnoA}
-              onClick={eseguiMasterball}
-              className="arka-button disabled:opacity-50"
-              title="Cattura garantita al 100%"
-            >
-              💎 Masterball ×{masterballRimaste}
-            </motion.button>
-          )}
+            ))}
+          </div>
         </div>
       )}
 
@@ -686,6 +760,8 @@ export function BattagliaScene() {
         <span className="text-sm">
           {terminata
             ? 'Battaglia finita'
+            : attesaAvversario
+            ? 'Premi Avversario... per continuare'
             : isPvP && attesaPassaggio
             ? attesaPassaggio.direzione === 'A→B'
               ? 'Pronto per passare il controllo al Rivale'
@@ -699,6 +775,15 @@ export function BattagliaScene() {
             : 'Turno avversario...'}
         </span>
       </div>
+
+      {scambioRichiesto && (
+        <ScambioModal
+          squadra={squadraA}
+          attivoId={pkmnA.istanzaId}
+          motivo={scambioRichiesto.motivo}
+          onSelect={scegliPokemonCambio}
+        />
+      )}
     </div>
   )
 }
@@ -706,6 +791,113 @@ export function BattagliaScene() {
 // =============================================================
 // SOTTOCOMPONENTI
 // =============================================================
+
+function InfoBox({
+  messaggi,
+  showOpponentButton,
+  onOpponentTurn,
+}: {
+  messaggi: string[]
+  showOpponentButton: boolean
+  onOpponentTurn: () => void
+}) {
+  const righe = messaggi.slice(-4)
+
+  return (
+    <div
+      className="absolute top-[38%] left-1/2 -translate-x-1/2 z-20 w-[min(44vw,560px)] min-h-[124px] rounded-lg border border-amber-200/35 bg-slate-950/78 px-6 py-5 text-white shadow-2xl backdrop-blur-sm"
+    >
+      <div className="space-y-1.5 pr-4 text-[15px] font-semibold leading-snug">
+        {righe.map((msg, idx) => (
+          <p key={`${idx}-${msg}`} className="truncate">
+            {msg}
+          </p>
+        ))}
+      </div>
+
+      {showOpponentButton && (
+        <button
+          className="absolute bottom-4 right-5 rounded-md bg-amber-400 px-4 py-2 text-xs font-extrabold text-slate-950 shadow-lg hover:bg-amber-300 active:scale-95"
+          onClick={onOpponentTurn}
+        >
+          Avversario...
+        </button>
+      )}
+    </div>
+  )
+}
+
+function ScambioModal({
+  squadra,
+  attivoId,
+  motivo,
+  onSelect,
+}: {
+  squadra: PokemonIstanza[]
+  attivoId: string
+  motivo: string
+  onSelect: (pokemon: PokemonIstanza) => void
+}) {
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/62 px-6 backdrop-blur-sm">
+      <div className="w-[min(760px,92vw)] rounded-lg border border-white/15 bg-slate-950/92 p-5 text-white shadow-2xl">
+        <div className="mb-4 flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-extrabold">Scegli un Pokemon</h2>
+            <p className="mt-1 text-sm font-semibold text-slate-300">{motivo}</p>
+          </div>
+          <span className="text-xs font-bold uppercase tracking-wide text-amber-300">
+            Cambio squadra
+          </span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          {squadra.slice(0, 6).map((pokemon) => {
+            const specie = getPokemon(pokemon.specieId)
+            const hpMax = calcolaHPMax(pokemon)
+            const pct = Math.max(0, Math.min(100, (pokemon.hp / hpMax) * 100))
+            const disabled = pokemon.hp <= 0 || pokemon.istanzaId === attivoId
+
+            return (
+              <button
+                key={pokemon.istanzaId}
+                disabled={disabled}
+                onClick={() => onSelect(pokemon)}
+                className="flex min-h-[116px] items-center gap-3 rounded-md border border-white/10 bg-slate-900/86 p-3 text-left shadow-lg transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <img
+                  src={assetUrl(`/sprites/front_sprites/${pokemon.specieId}.png`)}
+                  alt=""
+                  className="h-20 w-20 shrink-0 object-contain"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-sm font-extrabold">
+                      {pokemon.nome}
+                    </span>
+                    <span className="text-xs font-bold text-slate-300">
+                      LV. {pokemon.livello}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/60">
+                    <div
+                      className="h-full bg-emerald-400"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <div className="mt-1 flex justify-between text-xs font-bold text-slate-300">
+                    <span>{pokemon.hp}/{hpMax}</span>
+                    <span>{pokemon.hp <= 0 ? 'KO' : specie?.tipo}</span>
+                  </div>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function SquadIndicator({
   squadra,
@@ -732,19 +924,22 @@ function SquadIndicator({
 
 function PokemonBattleSlot({
   istanza,
-  hpMax,
   position,
   shaking,
   lunging,
 }: {
   istanza: PokemonIstanza
-  hpMax: number
   position: 'top-right' | 'bottom-left'
   shaking: boolean
   lunging: boolean
 }) {
   const isPlayer = position === 'bottom-left'
-  const posClass = isPlayer ? 'bottom-32 left-12 flex-row' : 'top-12 right-12 flex-row-reverse'
+  const posClass = isPlayer
+    ? 'bottom-[13%] left-[6%]'
+    : 'top-[14%] right-[7%]'
+  const spriteSizeClass = isPlayer
+    ? 'w-[clamp(250px,23vw,370px)] h-[clamp(250px,23vw,370px)]'
+    : 'w-[clamp(210px,19vw,320px)] h-[clamp(210px,19vw,320px)]'
   // Vista posteriore per il giocatore (visto da dietro), frontale per l'avversario.
   const spriteFolder = isPlayer ? 'back_sprites' : 'front_sprites'
   const spriteSrc = assetUrl(`/sprites/${spriteFolder}/${istanza.specieId}.png`)
@@ -759,7 +954,7 @@ function PokemonBattleSlot({
 
   return (
     <motion.div
-      className={`absolute ${posClass} flex items-center gap-4 z-10`}
+      className={`absolute ${posClass} z-10`}
       initial={{ x: isPlayer ? -400 : 400, opacity: 0 }}
       animate={{
         x: 0,
@@ -772,13 +967,12 @@ function PokemonBattleSlot({
       <motion.div
         animate={innerAnim}
         transition={{ duration: 0.4 }}
-        className="w-40 h-40 flex items-center justify-center drop-shadow-2xl"
+        className={`${spriteSizeClass} flex items-center justify-center drop-shadow-2xl`}
       >
         <img
           src={spriteSrc}
           alt={istanza.nome}
-          className="w-full h-full object-contain pixelated"
-          style={{ imageRendering: 'pixelated' }}
+          className="w-full h-full object-contain"
           onError={(e) => {
             // Fallback emoji se lo sprite non esiste
             ;(e.currentTarget as HTMLImageElement).style.display = 'none'
@@ -794,13 +988,6 @@ function PokemonBattleSlot({
         </span>
       </motion.div>
 
-      <HpBar
-        nome={istanza.nome}
-        livello={istanza.livello}
-        hp={istanza.hp}
-        hpMax={hpMax}
-        stato={istanza.stato?.tipo}
-      />
     </motion.div>
   )
 }
@@ -811,34 +998,42 @@ function HpBar({
   hp,
   hpMax,
   stato,
+  side,
+  className = '',
 }: {
   nome: string
   livello: number
   hp: number
   hpMax: number
   stato?: StatoAlterato
+  side: 'player' | 'enemy'
+  className?: string
 }) {
-  const pct = (hp / hpMax) * 100
+  const pct = Math.max(0, Math.min(100, (hp / hpMax) * 100))
   const colore = pct > 60 ? 'var(--hp-high)' : pct > 25 ? 'var(--hp-mid)' : 'var(--hp-low)'
   const badge = stato ? STATO_BADGE[stato] : null
+  const accent = side === 'player' ? '#60a5fa' : '#ef4444'
 
   return (
-    <div className="arka-panel min-w-[200px] px-3 py-2">
-      <div className="flex justify-between items-baseline mb-1">
-        <span className="font-bold text-sm flex items-center gap-1.5">
+    <div
+      className={`absolute z-20 w-[min(28vw,390px)] rounded-lg border border-white/15 bg-slate-950/82 px-4 py-3 text-white shadow-2xl backdrop-blur-sm ${className}`}
+      style={{ borderLeft: `5px solid ${accent}` }}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="min-w-0 truncate text-[15px] font-extrabold leading-none">
           {nome}
           {badge && (
             <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${badge.color} text-white uppercase tracking-wider`}
+              className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${badge.color} text-white`}
               title={stato}
             >
               {badge.emoji} {badge.label}
             </span>
           )}
         </span>
-        <span className="text-xs text-arka-text-muted">LV. {livello}</span>
+        <span className="shrink-0 text-[12px] font-extrabold text-slate-200">LV. {livello}</span>
       </div>
-      <div className="h-3 bg-slate-900 rounded-full overflow-hidden">
+      <div className="mt-3 h-[9px] overflow-hidden rounded-full bg-black/60 ring-1 ring-white/15">
         <motion.div
           className="h-full"
           style={{ backgroundColor: colore }}
@@ -847,10 +1042,40 @@ function HpBar({
           transition={{ duration: 0.5, ease: 'easeOut' }}
         />
       </div>
-      <div className="text-xs text-right mt-1 text-arka-text-muted">
+      <div className="mt-1 text-right text-[11px] font-bold text-slate-300">
         {hp}/{hpMax}
       </div>
     </div>
+  )
+}
+
+function typeColor(tipo: string): string {
+  const key = tipo
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  return `var(--tw-color-tipo-${key})`
+}
+
+function ActionButton({
+  children,
+  disabled,
+  onClick,
+}: {
+  children: ReactNode
+  disabled: boolean
+  onClick: () => void
+}) {
+  return (
+    <motion.button
+      whileHover={!disabled ? { y: -1, scale: 1.02 } : {}}
+      whileTap={!disabled ? { scale: 0.96 } : {}}
+      disabled={disabled}
+      onClick={onClick}
+      className="rounded-md bg-amber-400 px-5 py-2.5 text-sm font-extrabold text-slate-950 shadow-lg transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-45"
+    >
+      {children}
+    </motion.button>
   )
 }
 
@@ -867,23 +1092,30 @@ function MoveButton({
 }) {
   const dadi = mossa.dadiPerLivello[String(livello)] ?? 1
   const incremento = mossa.incrementoPerLivello[String(livello)] ?? 0
-  const coloreTipo = `var(--tw-color-tipo-${mossa.tipo.toLowerCase()})`
+  const coloreTipo = typeColor(mossa.tipo)
 
   return (
     <motion.button
-      whileHover={!disabled ? { scale: 1.05 } : {}}
+      whileHover={!disabled ? { y: -2, scale: 1.02 } : {}}
       whileTap={!disabled ? { scale: 0.95 } : {}}
       disabled={disabled}
       onClick={onClick}
-      className="arka-panel px-3 py-2 text-left disabled:opacity-50"
-      style={{ borderTop: `3px solid ${coloreTipo}` }}
+      className="relative min-h-[92px] overflow-hidden rounded-md border border-white/15 bg-slate-900/88 px-4 py-3 text-left text-white shadow-lg transition-colors hover:bg-slate-800/95 disabled:cursor-not-allowed disabled:opacity-45"
+      style={{
+        borderLeft: `6px solid ${coloreTipo}`,
+      }}
     >
-      <div className="font-bold text-sm">{mossa.nome}</div>
-      <div className="text-xs text-arka-text-muted flex items-center gap-2 mt-1">
-        <span>
-          🎲 {dadi}d6 +{incremento}
+      <div className="truncate pr-2 text-[15px] font-extrabold leading-tight">{mossa.nome}</div>
+      <div className="mt-3 flex items-center justify-between gap-2 text-[12px] font-bold text-slate-100">
+        <span className="rounded bg-black/35 px-2 py-1">
+          D6 {dadi} +{incremento}
         </span>
-        <span className="text-xs">{mossa.tipo}</span>
+        <span
+          className="rounded px-2 py-1 text-[11px] font-extrabold uppercase tracking-wide text-slate-950"
+          style={{ backgroundColor: coloreTipo }}
+        >
+          {mossa.tipo}
+        </span>
       </div>
     </motion.button>
   )
