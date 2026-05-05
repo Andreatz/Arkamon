@@ -15,6 +15,10 @@ import type {
   NavigazioneScena,
   SceneId,
   OggettoId,
+  PosizioneAvatar,
+  StatoTurnoOverworld,
+  Casella,
+  MappaGriglia,
 } from '@/types'
 import {
   calcolaHPMax,
@@ -25,6 +29,14 @@ import {
 } from '@engine/battleEngine'
 import { getPokemon, getAllenatore } from '@data/index'
 import { scambia, type SlotRef } from '@engine/deposito'
+import {
+  chiaveCasellaConsumata,
+  consumaAzione,
+  nuovoTurno,
+  puòMuoversi,
+  risultatoInterazione,
+  type RisultatoInterazione,
+} from '@engine/movimento'
 
 interface GameState {
   // === STATO GIOCATORI ===
@@ -38,6 +50,11 @@ interface GameState {
 
   /** ID specie dello starter assegnato al Rivale (quello scartato dai giocatori) */
   rivaleStarterId: number | null
+
+  // === OVERWORLD (Fase E) ===
+  posizione1: PosizioneAvatar
+  posizione2: PosizioneAvatar
+  turnoOverworld: StatoTurnoOverworld
 
   // === NAVIGAZIONE ===
   scenaCorrente: NavigazioneScena
@@ -100,6 +117,34 @@ interface GameState {
   /** Termina la battaglia, opzionalmente curando la squadra */
   terminaBattaglia: (curaCompleta: boolean) => void
 
+  // === ACTIONS OVERWORLD (Fase E) ===
+
+  /**
+   * Muove l'avatar del giocatore alla nuova posizione (deve essere adiacente
+   * e calpestabile). Decrementa di 1 le azioni rimaste; se arriva a 0 passa
+   * automaticamente il turno all'altro giocatore.
+   * Ritorna `true` se il movimento è stato applicato.
+   */
+  muoviAvatar: (giocatoreId: 1 | 2, nuovaPos: PosizioneAvatar, mappa: MappaGriglia) => boolean
+
+  /**
+   * Interagisce con la casella in (x, y) sulla mappa data. Marca la casella
+   * come consumata (per cespuglio/allenatore/npc), gestisce internamente
+   * `transizione-mappa` (sposta l'avatar sulla mappa di destinazione) e
+   * chiude il turno (azioni → 0 → swap).
+   * Ritorna il `RisultatoInterazione` per delegare battaglia/edificio
+   * alla UI; `no-op` se la casella non è interagibile dal giocatore.
+   */
+  interagisciCasella: (
+    giocatoreId: 1 | 2,
+    mappa: MappaGriglia,
+    x: number,
+    y: number
+  ) => RisultatoInterazione
+
+  /** Forza lo swap del turno overworld (usato dalla UI come pulsante manuale). */
+  passaTurnoOverworld: () => void
+
   /** Reset completo del gioco (Nuova Partita) */
   reset: () => void
 }
@@ -114,6 +159,15 @@ const giocatoreVuoto = (id: 1 | 2): StatoGiocatore => ({
   monete: 0,
   // Inventario di partenza: 1 Masterball per la cattura garantita di un leggendario
   inventario: { masterball: 1 },
+  caselleConsumate: new Set(),
+})
+
+/** Posizione overworld iniziale di default (Fase E). */
+const posizioneIniziale = (): PosizioneAvatar => ({
+  mappaId: 'mappa-principale',
+  x: 0,
+  y: 0,
+  direzione: 'S',
 })
 
 /**
@@ -138,6 +192,9 @@ export const useGameStore = create<GameState>()(
       giocatoreAttivo: 1,
       battaglia: null,
       rivaleStarterId: null,
+      posizione1: posizioneIniziale(),
+      posizione2: posizioneIniziale(),
+      turnoOverworld: { giocatoreAttivo: 1, azioniRimaste: 2 },
       scenaCorrente: { scena: 'titolo' },
       scenaPrecedente: null,
 
@@ -384,6 +441,85 @@ export const useGameStore = create<GameState>()(
           }
         }),
 
+      // ----------------------------------------------------------------
+      // OVERWORLD (Fase E)
+      // ----------------------------------------------------------------
+
+      muoviAvatar: (giocatoreId, nuovaPos, mappa) => {
+        const state = get()
+        const chiavePos = giocatoreId === 1 ? 'posizione1' : 'posizione2'
+        const da = state[chiavePos]
+        if (state.turnoOverworld.giocatoreAttivo !== giocatoreId) return false
+        if (state.turnoOverworld.azioniRimaste <= 0) return false
+        if (!puòMuoversi(da, { x: nuovaPos.x, y: nuovaPos.y }, mappa)) return false
+
+        const turnoNuovo = consumaAzione(state.turnoOverworld, 'movimento')
+        const turnoFinale =
+          turnoNuovo.azioniRimaste <= 0 ? nuovoTurno(giocatoreId) : turnoNuovo
+
+        set({
+          [chiavePos]: nuovaPos,
+          turnoOverworld: turnoFinale,
+        } as Partial<GameState>)
+        return true
+      },
+
+      interagisciCasella: (giocatoreId, mappa, x, y) => {
+        const state = get()
+        if (state.turnoOverworld.giocatoreAttivo !== giocatoreId) {
+          return { tipo: 'no-op' }
+        }
+        const casella: Casella | undefined = mappa.caselle[y]?.[x]
+        if (!casella) return { tipo: 'no-op' }
+
+        const chiaveG = giocatoreId === 1 ? 'giocatore1' : 'giocatore2'
+        const g = state[chiaveG]
+        const r = risultatoInterazione(
+          mappa.id,
+          x,
+          y,
+          casella,
+          giocatoreId,
+          {
+            caselleConsumate: g.caselleConsumate,
+            allenatoriSconfitti: g.allenatoriSconfitti,
+          }
+        )
+        if (r.tipo === 'no-op') return r
+
+        // Marca la casella come consumata se è un tipo "esauribile".
+        // Edifici e uscite restano sempre interagibili.
+        const chiave = chiaveCasellaConsumata(mappa.id, x, y, casella)
+        const nuoveConsumate = chiave
+          ? new Set(g.caselleConsumate).add(chiave)
+          : g.caselleConsumate
+
+        // Se è una transizione-mappa, sposta l'avatar sul nuovo spawn.
+        const chiavePos = giocatoreId === 1 ? 'posizione1' : 'posizione2'
+        const nuovaPos: PosizioneAvatar =
+          r.tipo === 'transizione-mappa'
+            ? {
+                mappaId: r.versoMappaId,
+                x: r.spawnX,
+                y: r.spawnY,
+                direzione: state[chiavePos].direzione,
+              }
+            : state[chiavePos]
+
+        // Interazione consuma l'intero turno → swap immediato.
+        const turnoFinale = nuovoTurno(giocatoreId)
+
+        set({
+          [chiaveG]: { ...g, caselleConsumate: nuoveConsumate },
+          [chiavePos]: nuovaPos,
+          turnoOverworld: turnoFinale,
+        } as Partial<GameState>)
+        return r
+      },
+
+      passaTurnoOverworld: () =>
+        set((s) => ({ turnoOverworld: nuovoTurno(s.turnoOverworld.giocatoreAttivo) })),
+
       reset: () =>
         set({
           giocatore1: giocatoreVuoto(1),
@@ -391,6 +527,9 @@ export const useGameStore = create<GameState>()(
           giocatoreAttivo: 1,
           battaglia: null,
           rivaleStarterId: null,
+          posizione1: posizioneIniziale(),
+          posizione2: posizioneIniziale(),
+          turnoOverworld: { giocatoreAttivo: 1, azioniRimaste: 2 },
           scenaCorrente: { scena: 'titolo' },
           scenaPrecedente: null,
         }),
@@ -404,19 +543,26 @@ export const useGameStore = create<GameState>()(
           ...state.giocatore1,
           cespugliVisitati: Array.from(state.giocatore1.cespugliVisitati),
           allenatoriSconfitti: Array.from(state.giocatore1.allenatoriSconfitti),
+          caselleConsumate: Array.from(state.giocatore1.caselleConsumate),
         },
         giocatore2: {
           ...state.giocatore2,
           cespugliVisitati: Array.from(state.giocatore2.cespugliVisitati),
           allenatoriSconfitti: Array.from(state.giocatore2.allenatoriSconfitti),
+          caselleConsumate: Array.from(state.giocatore2.caselleConsumate),
         },
       }) as unknown as GameState,
       merge: (persisted, current) => {
         // Riconverti gli array in Set dopo il caricamento.
-        // Per le save pre-inventario: fallback a inventario di default.
-        const p = persisted as GameState
-        const inv = (g: StatoGiocatore) =>
-          g.inventario ?? { masterball: 1 }
+        // Per save preesistenti: fallback a default per i campi nuovi
+        // (inventario, caselleConsumate, posizione, turnoOverworld).
+        const p = persisted as Partial<GameState> & {
+          giocatore1: StatoGiocatore
+          giocatore2: StatoGiocatore
+        }
+        const inv = (g: StatoGiocatore) => g.inventario ?? { masterball: 1 }
+        const consumate = (g: StatoGiocatore) =>
+          new Set((g.caselleConsumate as unknown as string[] | undefined) ?? [])
         return {
           ...current,
           ...p,
@@ -425,13 +571,18 @@ export const useGameStore = create<GameState>()(
             cespugliVisitati: new Set(p.giocatore1.cespugliVisitati as unknown as string[]),
             allenatoriSconfitti: new Set(p.giocatore1.allenatoriSconfitti as unknown as number[]),
             inventario: inv(p.giocatore1),
+            caselleConsumate: consumate(p.giocatore1),
           },
           giocatore2: {
             ...p.giocatore2,
             cespugliVisitati: new Set(p.giocatore2.cespugliVisitati as unknown as string[]),
             allenatoriSconfitti: new Set(p.giocatore2.allenatoriSconfitti as unknown as number[]),
             inventario: inv(p.giocatore2),
+            caselleConsumate: consumate(p.giocatore2),
           },
+          posizione1: p.posizione1 ?? posizioneIniziale(),
+          posizione2: p.posizione2 ?? posizioneIniziale(),
+          turnoOverworld: p.turnoOverworld ?? { giocatoreAttivo: 1, azioniRimaste: 2 },
         }
       },
     }

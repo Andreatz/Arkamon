@@ -144,6 +144,12 @@ export interface StatoGiocatore {
   monete: number
   /** Inventario oggetti (id → quantità). 0 o assente = nessuno. */
   inventario: Partial<Record<OggettoId, number>>
+  /**
+   * Caselle overworld già consumate da questo giocatore (Fase E).
+   * Chiavi nel formato `<mappaId>:<x>,<y>:<tipo>:<id>` (vedi
+   * `chiaveCasellaConsumata` in `src/engine/movimento.ts`).
+   */
+  caselleConsumate: Set<string>
 }
 
 /** Stato della battaglia in corso (analogo del foglio Battaglia_Corrente VBA) */
@@ -186,6 +192,52 @@ export interface RisultatoMossa {
   statoApplicato?: StatoAlterato
   /** Autodanno subito dall'attaccante (es. mossa Suprema). 0/undefined se nessuno. */
   autodanno?: number
+}
+
+// =============================================================
+// OVERWORLD A GRIGLIA (Fase E)
+// =============================================================
+
+/**
+ * Una casella della griglia di una mappa overworld.
+ * Discriminata per `tipo`. Le caselle "interagibili" (cespuglio, allenatore,
+ * npc, edificio, uscita) consumano l'intero turno (2 azioni); `transito` ne
+ * consuma 1; `ostacolo` non è calpestabile.
+ */
+export type Casella =
+  | { tipo: 'transito' }
+  | { tipo: 'cespuglio'; cespuglioId: string }
+  | { tipo: 'allenatore'; allenatoreId: number }
+  | { tipo: 'npc'; dialogoId: string }
+  | { tipo: 'edificio'; edificioId: 'centro' | 'palestra' | 'laboratorio' | 'deposito' }
+  | { tipo: 'uscita'; versoMappaId: string; spawnX: number; spawnY: number }
+  | { tipo: 'ostacolo' }
+
+/** Definizione statica di una mappa a griglia. */
+export interface MappaGriglia {
+  id: string
+  larghezza: number
+  altezza: number
+  /** caselle[y][x], y dall'alto verso il basso */
+  caselle: Casella[][]
+  spawnDefault: { x: number; y: number }
+  /** Path immagine di sfondo, da risolvere con assetUrl() in UI */
+  background: string
+}
+
+/** Posizione runtime di un avatar in overworld. */
+export interface PosizioneAvatar {
+  mappaId: string
+  x: number
+  y: number
+  direzione: 'N' | 'S' | 'E' | 'O'
+}
+
+/** Stato del turno overworld (sequenziale a turni A→B). */
+export interface StatoTurnoOverworld {
+  giocatoreAttivo: 1 | 2
+  /** 2 a inizio turno; movimento -1, interazione → 0 */
+  azioniRimaste: number
 }
 
 // =============================================================
