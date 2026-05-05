@@ -115,6 +115,13 @@ export function MappaPrincipaleScene() {
           >
             Deposito
           </button>
+          <button
+            onClick={() => vaiAScena('mappa-griglia')}
+            className="arka-button-secondary text-sm py-2 px-4"
+            title="Test overworld a griglia (E.3)"
+          >
+            🗺️ Test E.3
+          </button>
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import { useGameStore } from '@store/gameStore'
 import { TitoloScene } from '@scenes/TitoloScene'
 import { LaboratorioScene } from '@scenes/LaboratorioScene'
 import { MappaPrincipaleScene } from '@scenes/MappaPrincipaleScene'
+import { MappaGrigliaScene } from '@scenes/MappaGrigliaScene'
 import { BattagliaScene } from '@scenes/BattagliaScene'
 import { PercorsoScene } from '@scenes/PercorsoScene'
 import { CittaScene } from '@scenes/CittaScene'
@@ -43,6 +44,8 @@ function renderScena(scena: string) {
       return <LaboratorioScene />
     case 'mappa-principale':
       return <MappaPrincipaleScene />
+    case 'mappa-griglia':
+      return <MappaGrigliaScene />
     case 'battaglia':
       return <BattagliaScene />
     case 'percorso':

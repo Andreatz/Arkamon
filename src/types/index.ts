@@ -248,6 +248,7 @@ export type SceneId =
   | 'titolo'
   | 'laboratorio'
   | 'mappa-principale'
+  | 'mappa-griglia'
   | 'percorso'
   | 'citta'
   | 'palestra'
